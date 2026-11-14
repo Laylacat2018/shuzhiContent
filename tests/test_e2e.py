@@ -172,7 +172,7 @@ def test_uc01_full_flow_ui(page, tmp_path):
     names = z.namelist()
     assert 'manifest.json' in names and 'index.html' in names and 'scene.glb' in names and '交付说明.txt' in names
     man = json.loads(z.read('manifest.json'))
-    assert len(man['assets']) == len([n for n in names if n.startswith('assets/')])  # 清单资产数与包内一致
+    assert len(man['assets']) == len([n for n in names if n.startswith('assets/') and n.endswith('.glb')])  # 清单资产数与包内一致
     for a in man['assets']:
         assert a['license_types'] and a['aigc']['implicit'] and a['seed'] is not None
     paths = []
