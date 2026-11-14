@@ -41,7 +41,14 @@
   async function saveFile(name, data, mime) {
     const blob = data instanceof Blob ? data : new Blob([data], { type: mime || 'application/octet-stream' });
     if (ARTIFACT) {
-      toast(`在线验收环境不支持下载文件，已生成「${name}」（${(blob.size / 1024).toFixed(1)} KB）。部署到服务器后可直接下载。`, 'warn');
+      // 在线验收环境：通过 downloads 能力保存；非白名单格式（glb / hdr / bvh / ply）打包为 zip
+      let dl = null; try { dl = global.claude && global.claude.use ? await global.claude.use('downloads') : null; } catch (e) { dl = null; }
+      if (!dl) { toast(`当前查看方式不支持下载，已生成「${name}」（${(blob.size / 1024).toFixed(1)} KB）。部署到服务器后可直接下载。`, 'warn'); return blob; }
+      const ok = /\.(zip|png|json|txt|md|csv|html|pdf)$/i.test(name);
+      let fname = name, data = blob;
+      if (!ok) { const z = new JSZip(); z.file(name, blob); data = await z.generateAsync({ type: 'blob' }); fname = name + '.zip'; }
+      try { await dl.save({ filename: fname, data }); toast('已保存 ' + fname); }
+      catch (e) { if (e && e.code !== 'declined') toast('保存失败：' + (e.message || e.code), 'err'); }
       return blob;
     }
     const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1000); toast('已下载 ' + name); return blob;
