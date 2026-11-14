@@ -1,0 +1,26 @@
+{
+  "name": "spatial-content-works",
+  "version": "1.0.0",
+  "description": "空间内容工场 · AIGC 沉浸式空间内容生产管线平台（演示版）",
+  "scripts": {
+    "build": "python3 web/build.py",
+    "start": "uvicorn server.app:app --port 8000",
+    "test": "python3 -m pytest tests -q"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Laylacat2018/shuzhiContent.git"
+  },
+  "license": "UNLICENSED",
+  "bugs": {
+    "url": "https://github.com/Laylacat2018/shuzhiContent/issues"
+  },
+  "homepage": "https://github.com/Laylacat2018/shuzhiContent#readme",
+  "devDependencies": {
+    "gltf-validator": "2.0.0-dev.3.10",
+    "jszip": "3.10.1",
+    "three": "0.128.0",
+    "vue": "3.4.38"
+  },
+  "private": true
+}

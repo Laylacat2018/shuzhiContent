@@ -1,0 +1,7 @@
+services:
+  web:
+    build: .
+    image: spatial-content-works:1.0.0-demo
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
