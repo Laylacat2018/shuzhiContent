@@ -24,6 +24,18 @@ CONDA_DIR="${CONDA_DIR:-$SCW_HOME/miniforge3}"
 LOG() { printf '\n\033[1;32m==> %s\033[0m\n' "$*"; }
 WSL=0; grep -qi microsoft /proc/version 2>/dev/null && WSL=1
 
+trap 'echo -e "\n\033[1;31m❌ 安装中断：第 $LINENO 行执行失败：$BASH_COMMAND\033[0m\n   把这一屏截图发给开发者；修好后重跑同一条命令即可，已完成的部分会自动跳过。" >&2' ERR
+
+# 开始前检查网络：DNS 解析失败时 apt / 下载会全部失败
+for h in github.com developer.download.nvidia.com; do
+  if ! getent hosts "$h" >/dev/null; then
+    echo -e "\033[1;31m❌ 无法解析 $h（DNS 不可用）\033[0m"
+    echo "   WSL 中可执行：rm -f /etc/resolv.conf; printf 'nameserver 223.5.5.5\\nnameserver 114.114.114.114\\n' > /etc/resolv.conf"
+    echo "   并在 /etc/wsl.conf 的 [network] 段加入 generateResolvConf=false，防止重启后被覆盖。"
+    exit 1
+  fi
+done
+
 want() { for a in "${ARGS[@]}"; do [[ "$a" == "--all" || "$a" == "$1" ]] && return 0; done; return 1; }
 ARGS=("$@"); [[ ${#ARGS[@]} -eq 0 ]] && { sed -n '2,22p' "$0"; exit 0; }
 
@@ -62,7 +74,7 @@ if want --cuda; then
   if ! command -v nvcc >/dev/null && [[ ! -x /usr/local/cuda-12.4/bin/nvcc ]]; then
     LOG "CUDA Toolkit 12.4"
     REPO=$([[ $WSL == 1 ]] && echo wsl-ubuntu || echo ubuntu2204)
-    tmp=$(mktemp -d); wget -q -O "$tmp/k.deb" "https://developer.download.nvidia.com/compute/cuda/repos/$REPO/x86_64/cuda-keyring_1.1-1_all.deb"
+    tmp=$(mktemp -d); wget -nv -O "$tmp/k.deb" "https://developer.download.nvidia.com/compute/cuda/repos/$REPO/x86_64/cuda-keyring_1.1-1_all.deb"
     sudo dpkg -i "$tmp/k.deb" && sudo apt-get update && sudo apt-get install -y cuda-toolkit-12-4
   fi
   grep -q 'cuda-12.4' ~/.bashrc || echo 'export CUDA_HOME=/usr/local/cuda-12.4; export PATH=$CUDA_HOME/bin:$PATH' >> ~/.bashrc
@@ -71,7 +83,7 @@ fi
 if want --conda; then
   if [[ ! -x "$CONDA_DIR/bin/conda" ]]; then
     LOG "Miniforge → $CONDA_DIR"
-    wget -q -O /tmp/miniforge.sh https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh
+    wget -nv -O /tmp/miniforge.sh https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh
     bash /tmp/miniforge.sh -b -p "$CONDA_DIR"
     "$CONDA_DIR/bin/conda" init bash >/dev/null
   fi
