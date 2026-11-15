@@ -259,7 +259,12 @@
     if (!d.title) fail('请填写需求名称');
     if (d.is_heritage === undefined || d.is_heritage === null) fail('“是否文物本体”为必填项');
     if (!d.platforms || !d.platforms.length) fail('请至少选择一个目标平台');
-    const job = Object.assign({ id: id('job'), code: 'REQ-' + pad(E.S.jobs.length + 1, 4), project_id: E.S.currentProjectId, status: 'draft', created_by: E.user().name, created_at: E.S.clock, quantity: 1, style_lora: '', ref_images: [] }, clone(d));
+    if (d.content_type && !CONTENT_TYPES[d.content_type]) fail('内容类型取值：' + Object.keys(CONTENT_TYPES).join('、'));
+    if (d.platforms.some(p => !PLATFORMS[p])) fail('目标平台取值：' + Object.keys(PLATFORMS).join('、'));
+    if (d.usage_scope && !SCOPES[d.usage_scope]) fail('使用范围取值：' + Object.keys(SCOPES).join('、'));
+    if (d.project_id && !E.S.projects.some(p => p.id === d.project_id)) fail('项目不存在');
+    const job = Object.assign({ id: id('job'), code: 'REQ-' + pad(E.S.jobs.length + 1, 4), project_id: E.S.currentProjectId, status: 'draft', created_by: E.user().name, created_at: E.S.clock, quantity: 1, style_lora: '', ref_images: [], content_type: 'prop' }, clone(d));
+    job.quantity = Math.max(1, Math.min(500, job.quantity | 0));
     if (job.is_heritage) job.content_type = 'recon';
     E.S.jobs.unshift(job); audit('创建需求单', job.code, job.title); emit('job.state', job);
     return job;
@@ -801,6 +806,7 @@
   E.discardAsset = function (aid) { need('gen3d'); const a = E.asset(aid); a.status = 'discarded'; a.discarded_at = E.S.clock; a.history.push({ time: E.S.clock, action: '丢弃', detail: '3D 生成阶段丢弃', by: E.user().name }); audit('丢弃资产', a.code); };
   E.optimize = function (aids, o) {
     need('optimize');
+    if (o.preset === 'custom' && o.custom) { const c = E.S.settings.presets.custom; c.tris = Math.max(500, +o.custom.tris || c.tris); c.tex = +o.custom.tex || c.tex; }
     const out = [];
     aids.forEach(aid => { const a = E.asset(aid), v = E.cur(a); if (!v.raw) return; out.push(queueOptimize(a, v, { preset: o.preset, manual: !!o.manual, ratio: o.ratio, by: E.user().name })); });
     audit('提交资产优化', out.length + ' 件', E.S.settings.presets[o.preset].name + (o.manual ? ' · 转人工重拓扑' : ''));
@@ -1149,6 +1155,46 @@
     audit('规则 / 设置变更', path, `${JSON.stringify(before)} → ${JSON.stringify(value)}（对变更后新提交的需求单生效）`);
   };
   E.setRelease = function (r) { need('admin'); E.S.release = r; audit('发布范围变更', '版本', r); };
+
+  // ---------- 字段级修改（白名单）与小动作：页面不直接写状态，便于服务端统一执行 ----------
+  const PATCHABLE = {
+    recon: { list: () => E.S.recon, fields: ['capture_record.collector', 'capture_record.date', 'capture_record.control', 'capture_record.colorChart', 'forceLowRatio', 'solver', 'engine', 'iterations', 'sh', 'platform', 'splat_limit'], perm: 'recon' },
+    scene: { list: () => E.S.scenes, fields: ['platform', 'name'], perm: 'assembly' },
+    character: { list: () => E.S.characters, fields: ['name'], perm: 'character' },
+  };
+  E.patch = function (kind, oid, path, value) {
+    const P = PATCHABLE[kind]; if (!P || !P.fields.includes(path)) fail('不允许修改该字段');
+    need(P.perm);
+    const o = P.list().find(x => x.id === oid) || fail('对象不存在');
+    const parts = path.split('.'); let t = o; for (let i = 0; i < parts.length - 1; i++) t = t[parts[i]] = t[parts[i]] || {};
+    t[parts[parts.length - 1]] = value;
+    if (kind === 'recon' && path === 'platform' && o.status !== 'trained') o.splat_limit = (value === 'quest3' || value === 'pico4') ? 500000 : 2000000;
+    return o;
+  };
+  E.updateClip = function (cid, idx, o) { need('character'); const c = E.S.characters.find(x => x.id === cid) || fail('角色不存在'); const cl = c.clips[idx] || fail('片段不存在'); if (o.duration != null) cl.duration = Math.max(0.5, Math.min(20, +o.duration)); if (o.blend != null) cl.blend = Math.max(0, Math.min(1.5, +o.blend)); return cl; };
+  E.removeClip = function (cid, idx) { need('character'); const c = E.S.characters.find(x => x.id === cid) || fail('角色不存在'); c.clips.splice(idx, 1); };
+  E.addSceneItem = function (sid, aid, pos) {
+    need('assembly'); const sc = E.scene(sid); const a = E.asset(aid);
+    if (a.type !== 'prop') fail('只有道具资产可以加入场景');
+    if (!['library', 'exported'].includes(a.status)) fail('只能使用已入库的资产');
+    if (!E.chainCheck(E.cur(a).license_chain, E.project(sc.project_id)).ok) fail('该资产许可链不满足项目使用范围', 'license');
+    const v = E.cur(a);
+    const it = { id: id('it'), asset_id: a.id, version_id: v.id, name: a.name, category: a.category, pos: pos || [(Math.random() - 0.5) * 4, 0, (Math.random() - 0.5) * 3], rotY: 0, scale: 1 };
+    sc.items.push(it); if (!a.scenes.includes(sc.id)) a.scenes.push(sc.id); sc.rev = (sc.rev || 0) + 1;
+    audit('加入场景', sc.code, a.code); return it;
+  };
+  E.scaleItem = function (sid, itemId, scale) { const sc = E.scene(sid); const it = sc.items.find(i => i.id === itemId); if (!it) return; it.scale = Math.max(0.2, Math.min(5, +scale)); sc.rev = (sc.rev || 0) + 1; };
+  E.togglePanoUse = function (pid, u) { const p = E.S.panoramas.find(x => x.id === pid) || fail('全景不存在'); const i = p.uses.indexOf(u); i >= 0 ? p.uses.splice(i, 1) : p.uses.push(u); return p.uses; };
+  E.readAlerts = function (aid) { E.S.alerts.forEach(a => { if (!aid || a.id === aid) a.read = true; }); };
+  E.stopCloudNode = function (nid) { need('task.control'); const n = E.S.cloudNodes.find(x => x.id === nid) || fail('节点不存在'); if (n.state === 'off') return; n.state = 'off'; n.stopped = E.S.clock; E.S.cloudCostMonth = +(E.S.cloudCostMonth + n.cost).toFixed(2); audit('手动关机云节点', n.name, '¥' + n.cost); };
+  E.setSpeed = function (v) { need('admin'); E.S.speed = Math.max(1, Math.min(60, +v || 15)); };
+  E.sendToQA = function (aid) { need('optimize'); const a = E.asset(aid); const v = E.cur(a); if (!v.opt) fail('请先完成优化'); if (['qa', 'review', 'library', 'exported'].includes(a.status)) fail('该资产已在质检或已入库'); return queueQA(a, v); };
+  E.createProject = function (o) {
+    need('admin'); if (!o || !o.name) fail('请填写项目名称'); if (!SCOPES[o.usage_scope]) fail('使用范围取值：internal、commercial_cn、commercial_overseas');
+    const p = { id: id('p'), name: o.name, usage_scope: o.usage_scope, default_platforms: (o.default_platforms || ['quest3']).filter(x => PLATFORMS[x]), client: o.client || '' };
+    E.S.projects.push(p); audit('创建项目', p.name, SCOPES[p.usage_scope]); return p;
+  };
+  E.setViewport = function (open) { E.S.gpu.viewportOpen = !!open; };
 
   // ---------- 统计（工作台） ----------
   E.stats = function () {

@@ -1,4 +1,4 @@
-"""空间内容工场 · 端到端验收测试（Playwright + Chromium）
+"""空间内容工场 · 端到端验收测试（Playwright + Chromium）· 单机版页面（浏览器内引擎）
 
 每个用例都是一个全新浏览器上下文（独立的演示数据）。
 UI 关键路径用真实点击完成；等待模型执行时用 Engine.fastForward 快进模拟时钟。
@@ -382,7 +382,7 @@ def test_persistence_after_reload(page):
 def test_mobile_no_horizontal_scroll(browser, server):
     ctx = browser.new_context(viewport={'width': 390, 'height': 844})
     pg = ctx.new_page()
-    pg.goto(server + '/')
+    pg.goto(server + '/standalone')
     pg.wait_for_selector('#login-btn')
     login(pg, 'admin')
     for r in ['workbench', 'review', 'library', 'queue']:

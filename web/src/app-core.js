@@ -53,7 +53,57 @@
     }
     const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1000); toast('已下载 ' + name); return blob;
   }
-  Object.assign(global.SCW, { toast, act, go, confirmBox, saveFile, U, ARTIFACT });
+  // ---------- 服务端模式：业务引擎在服务端运行，页面写操作经 /api/v1/rpc，状态每秒同步 ----------
+  const SERVER = global.SCW_MODE === 'server';
+  const RPC_FNS = ['createJob', 'updateJob', 'submitJob', 'cancelJob', 'deleteJob', 'taskAction', 'review', 'manualResolve', 'rollback', 'generateConcepts', 'selectConcepts', 'discardConcepts', 'regenerate3d', 'discardAsset', 'optimize', 'sendToQA', 'tagAssets', 'deleteAsset', 'generatePanoramas', 'fixSeam', 'upscalePano', 'submitWorld', 'createDataset', 'appendPhotos', 'solvePoses', 'trainGS', 'cleanRecon', 'finishRecon', 'createCharacter', 'rigCharacter', 'confirmWeights', 'genMotion', 'addClip', 'updateClip', 'removeClip', 'createScene', 'agentSend', 'agentConfirm', 'sceneConfirm', 'addStill', 'moveItem', 'scaleItem', 'addSceneItem', 'createExport', 'updateModel', 'registerModel', 'uploadLicense', 'confirmLicense', 'updateSettings', 'setRelease', 'setSpeed', 'autoFix', 'runQA', 'enqueue', 'audit', 'patch', 'togglePanoUse', 'readAlerts', 'stopCloudNode', 'setViewport', 'createProject'];
+  const net = { token: '', uid: '', pid: '', ws: '', rev: -1, busy: false, password: '' };
+  try { net.token = sessionStorage.getItem('scw.token') || ''; net.uid = sessionStorage.getItem('scw.uid') || ''; net.pid = sessionStorage.getItem('scw.pid') || ''; net.ws = sessionStorage.getItem('scw.ws') || ''; } catch (e) { }
+  function persistNet() { try { sessionStorage.setItem('scw.token', net.token); sessionStorage.setItem('scw.uid', net.uid); sessionStorage.setItem('scw.pid', net.pid); sessionStorage.setItem('scw.ws', net.ws); } catch (e) { } }
+  // 同步请求：页面动作需要立即拿到返回值（例如新建对象的编号），与浏览器内引擎的调用方式一致
+  function xhr(method, url, body) {
+    const x = new XMLHttpRequest(); x.open(method, url, false);
+    x.setRequestHeader('Content-Type', 'application/json');
+    if (net.token) x.setRequestHeader('Authorization', 'Bearer ' + net.token);
+    if (net.pid) x.setRequestHeader('X-SCW-Project', net.pid);
+    try { x.send(body ? JSON.stringify(body) : null); } catch (e) { throw new E.BizError('无法连接服务器，请检查网络', 'network'); }
+    let data = null; try { data = x.responseText ? JSON.parse(x.responseText) : null; } catch (e) { }
+    if (x.status === 401) { net.token = ''; persistNet(); st.logged = false; throw new E.BizError('登录已过期，请重新登录', 'auth'); }
+    if (x.status >= 400) throw new E.BizError((data && data.detail) || ('服务器错误 ' + x.status), (data && data.code) || 'server');
+    return data;
+  }
+  function applyState(S) {
+    if (!S) return;
+    if (net.pid && S.projects.some(p => p.id === net.pid)) S.currentProjectId = net.pid; else net.pid = S.currentProjectId;
+    if (net.uid) S.currentUserId = net.uid;
+    E.S = S; st.rev++;
+  }
+  function serverLogin(uid, password, ws) {
+    const r = xhr('POST', '/api/v1/auth/login', { user_id: uid, password, workspace: ws || net.ws || undefined });
+    net.token = r.token; net.uid = uid; net.ws = r.workspace; net.password = password; persistNet();
+    pull(true);
+    return r;
+  }
+  function pull(sync) {
+    if (sync) { const x = new XMLHttpRequest(); x.open('GET', '/api/v1/state', false); x.setRequestHeader('Authorization', 'Bearer ' + net.token); x.send(); if (x.status === 401) { st.logged = false; return false; } if (x.status !== 200) return false; net.rev = +x.getResponseHeader('X-SCW-Rev'); applyState(JSON.parse(x.responseText)); return true; }
+    if (net.busy || !net.token) return;
+    net.busy = true;
+    fetch('/api/v1/state?since=' + net.rev, { headers: { Authorization: 'Bearer ' + net.token } })
+      .then(r => { if (r.status === 401) { st.logged = false; return null; } net.rev = +(r.headers.get('X-SCW-Rev') || -1); return r.status === 200 ? r.json() : null; })
+      .then(S => { if (S) applyState(S); }).catch(() => { }).finally(() => { net.busy = false; });
+  }
+  function installServerEngine() {
+    RPC_FNS.forEach(fn => {
+      E[fn] = function () {
+        const r = xhr('POST', '/api/v1/rpc', { fn, args: Array.prototype.slice.call(arguments) });
+        net.rev = r.rev; applyState(r.state);
+        return r.result;
+      };
+    });
+    E.reset = function () { const r = xhr('POST', '/api/v1/rpc', { fn: 'reset', args: [] }); net.rev = r.rev; applyState(r.state); };
+    E.save = function () { };
+    E.tick = function () { };
+  }
+  Object.assign(global.SCW, { toast, act, go, confirmBox, saveFile, U, ARTIFACT, SERVER, net, serverLogin });
 
   // ---------- 公共组件 ----------
   const C = {};
@@ -136,9 +186,9 @@
       const alerts = computed(() => { st.rev; return E.S.alerts.filter(a => !a.read).length; });
       const locked = computed(() => D.VERSION_ORDER[item.value.ver] > D.VERSION_ORDER[E.S.release]);
       const role = computed(() => { st.rev; return E.user().role; });
-      const switchUser = (uid) => { E.S.currentUserId = uid; E.audit('切换账号', E.user().name, D.ROLES[E.user().role]); st.rev++; E.save(); toast('已切换为 ' + E.user().name + '（' + D.ROLES[E.user().role] + '）'); };
-      const switchProject = (pid) => { E.S.currentProjectId = pid; st.rev++; E.save(); toast('已切换项目：' + E.project().name); };
-      const logout = () => { st.logged = false; try { sessionStorage.removeItem('scw.logged'); } catch (e) { } };
+      const switchUser = (uid) => { if (SERVER) { try { serverLogin(uid, net.password || 'demo-2026'); } catch (e) { toast(e.message, 'err'); return; } toast('已切换为 ' + E.user().name + '（' + D.ROLES[E.user().role] + '）'); return; } E.S.currentUserId = uid; E.audit('切换账号', E.user().name, D.ROLES[E.user().role]); st.rev++; E.save(); toast('已切换为 ' + E.user().name + '（' + D.ROLES[E.user().role] + '）'); };
+      const switchProject = (pid) => { if (SERVER) { net.pid = pid; persistNet(); } E.S.currentProjectId = pid; st.rev++; E.save(); toast('已切换项目：' + E.project().name); };
+      const logout = () => { st.logged = false; net.token = ''; persistNet(); try { sessionStorage.removeItem('scw.logged'); } catch (e) { } };
       const theme = () => { const cur = document.documentElement.getAttribute('data-theme'); const dark = cur ? cur === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches; document.documentElement.setAttribute('data-theme', dark ? 'light' : 'dark'); };
       return { st, E, D, NAV, pageComp, item, top, alerts, locked, role, go, switchUser, switchProject, logout, theme, U };
     },
@@ -182,8 +232,8 @@
 
   const Login = {
     setup() {
-      const uid = ref('u_pm'); const canvas = ref(null); let raf;
-      const enter = () => { E.S.currentUserId = uid.value; E.audit('登录', E.user().name, D.ROLES[E.user().role] + '（演示账号，JWT 由部署版后端签发）'); st.logged = true; try { sessionStorage.setItem('scw.logged', '1'); } catch (e) { } E.save(); };
+      const uid = ref('u_pm'); const canvas = ref(null); let raf; const pw = ref('demo-2026'); const wsName = ref(net.ws || 'default'); const err = ref('');
+      const enter = () => { if (SERVER) { err.value = ''; try { serverLogin(uid.value, pw.value, wsName.value.trim().toLowerCase()); st.logged = true; } catch (e) { err.value = e.message; } return; } E.S.currentUserId = uid.value; E.audit('登录', E.user().name, D.ROLES[E.user().role] + '（演示账号，JWT 由部署版后端签发）'); st.logged = true; try { sessionStorage.setItem('scw.logged', '1'); } catch (e) { } E.save(); };
       onMounted(() => {
         const c = canvas.value; const x = c.getContext('2d'); const pts = []; const R = Geo.rng(42);
         for (let i = 0; i < 900; i++) pts.push([R() * 2 - 1, R() * 2 - 1, R() * 2 - 1, R()]);
@@ -191,7 +241,7 @@
         if (!matchMedia('(prefers-reduced-motion: reduce)').matches) raf = requestAnimationFrame(loop); else loop(0);
       });
       onUnmounted(() => cancelAnimationFrame(raf));
-      return { uid, enter, canvas, E, D };
+      return { uid, enter, canvas, E, D, pw, wsName, err, SERVER };
     },
     template: `<div class="login">
       <div class="art"><canvas ref="canvas" aria-hidden="true"></canvas>
@@ -201,11 +251,13 @@
       </div>
       <form class="form" @submit.prevent="enter">
         <h2 style="font-family:var(--f-display);font-size:22px">登录</h2>
-        <div class="note">演示环境：选择一个角色登录，可随时在右上角切换账号，体验不同角色的权限。</div>
+        <div class="note">{{ SERVER ? '选择账号登录（演示密码 demo-2026，可由管理员通过环境变量修改）。登录后可在右上角切换账号，体验不同角色的权限。' : '演示环境：选择一个角色登录，可随时在右上角切换账号，体验不同角色的权限。' }}</div>
         <div class="role-pick">
           <button type="button" v-for="u in E.S.users" :key="u.id" :class="{on: uid===u.id}" @click="uid=u.id"><b>{{ u.name }}</b><span>{{ D.ROLES[u.role] }}</span></button>
         </div>
-        <div class="field"><label for="pw">密码</label><input id="pw" class="inp" type="password" value="demo-2026" autocomplete="off"></div>
+        <div class="field"><label for="pw">密码</label><input id="pw" class="inp" type="password" v-model="pw" autocomplete="off"></div>
+        <div class="field" v-if="SERVER"><label for="ws">工作区</label><input id="ws" class="inp" v-model="wsName" placeholder="default"><span class="faint small">同一工作区的同事共享需求单、资产库与任务队列；对外演示可另开工作区（如 demo-zhang），互不干扰。</span></div>
+        <div class="note err" v-if="err">{{ err }}</div>
         <button class="btn primary" type="submit" id="login-btn" style="padding:9px">进入平台</button>
         <p class="faint small">局域网访问 · 账号登录 · 角色权限（PRD 第 2 章权限矩阵）</p>
       </form>
@@ -225,12 +277,20 @@
     app.config.errorHandler = (err) => { console.error(err); toast('页面错误：' + err.message, 'err'); };
     app.mount('#app');
     setTimeout(() => {
-      E.init();
-      try { st.logged = sessionStorage.getItem('scw.logged') === '1'; } catch (e) { }
       const h = (location.hash || '').replace('#', ''); if (ROUTES.some(r => r.r === h)) st.route = h;
-      st.booting = false;
-      let last = performance.now(), lastSave = 0;
-      setInterval(() => { const now = performance.now(); E.tick(now - last); last = now; st.rev++; if (now - lastSave > 4000) { E.save(); lastSave = now; } }, 500);
+      if (SERVER) {
+        installServerEngine();
+        E.S = { users: [{ id: 'u_pm', name: '林策划', role: 'pm' }, { id: 'u_art', name: '周美术', role: 'artist' }, { id: 'u_rev', name: '陈审核', role: 'reviewer' }, { id: 'u_admin', name: '王管理', role: 'admin' }] };
+        st.logged = !!net.token && pull(true);
+        st.booting = false;
+        setInterval(() => { if (st.logged) pull(false); }, 1000);
+      } else {
+        E.init();
+        try { st.logged = sessionStorage.getItem('scw.logged') === '1'; } catch (e) { }
+        st.booting = false;
+        let last = performance.now(), lastSave = 0;
+        setInterval(() => { const now = performance.now(); E.tick(now - last); last = now; st.rev++; if (now - lastSave > 4000) { E.save(); lastSave = now; } }, 500);
+      }
       window.addEventListener('hashchange', () => { const r = location.hash.replace('#', ''); if (ROUTES.some(x => x.r === r) && r !== st.route) st.route = r; });
     }, 30);
   };

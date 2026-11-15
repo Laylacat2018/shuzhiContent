@@ -3,6 +3,8 @@
 输出：
   dist/index.html     —— 部署版（完整 HTML 文档，第三方库走本地 /vendor，可离线局域网使用）
   dist/artifact.html  —— 在线验收版（片段，第三方库走 jsDelivr CDN）
+  dist/standalone.html —— 单机版（浏览器内引擎，数据存本机浏览器）
+  dist/engine-bundle.js —— 服务端引擎包
 """
 import pathlib, shutil, subprocess
 
@@ -31,12 +33,16 @@ def build():
                 .replace('__MODE__', mode).replace('<!--__LIBS__-->', libs))
     cdn = '\n'.join(f'<script src="{u}"></script>' for _, u in LIBS)
     local = '\n'.join(f'<script src="vendor/{p.split("/")[0]}/{pathlib.Path(p).name}"></script>' for p, _ in LIBS)
+    # 服务端引擎包（与前端同一份业务引擎）
+    (DIST / 'engine-bundle.js').write_text('\n;\n'.join((SRC / f).read_text(encoding='utf-8') for f in ('geometry.js', 'engine.js')), encoding='utf-8')
     (DIST / 'artifact.html').write_text(page('artifact', cdn), encoding='utf-8')
     full = '<!doctype html>\n<html lang="zh-CN">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n'
     body = page('server', local)
     head, _, rest = body.partition('<div id="app"></div>')
     full += head + '</head>\n<body>\n<div id="app"></div>' + rest + '\n</body>\n</html>\n'
     (DIST / 'index.html').write_text(full, encoding='utf-8')
+    # 单机版：业务引擎在浏览器内运行（离线演示 / 自测），由服务端 /standalone 提供
+    (DIST / 'standalone.html').write_text(full.replace("window.SCW_MODE = 'server'", "window.SCW_MODE = 'local'"), encoding='utf-8')
     # 第三方库落到 dist/vendor（来自 node_modules）
     nm = ROOT.parent / 'node_modules'
     for p, _ in LIBS:

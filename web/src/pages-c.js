@@ -144,7 +144,7 @@ new THREE.GLTFLoader().load('scene.glb',g=>s.add(g.scene));r.setAnimationLoop(()
       const cur = computed(() => { st.rev; return detail.value && E.S.assets.find(a => a.id === detail.value); });
       const tag = async () => { const t = await confirmBox({ title: '批量加标签', text: `为 ${sel.size} 件资产添加标签`, input: '', inputLabel: '标签', ok: '添加' }); if (t) act(() => E.tagAssets([...sel], t.trim()), '已添加标签'); };
       const scenes = computed(() => { st.rev; return E.S.scenes.filter(s => s.project_id === E.S.currentProjectId); });
-      const addToScene = async (ids) => { const sc = scenes.value[0]; if (!sc) return toast('请先在场景组装中创建场景', 'err'); ids.forEach((id, i) => { const a = E.asset(id); const v = E.cur(a); if (a.type !== 'prop') return; sc.items.push({ id: 'it_' + Math.random().toString(36).slice(2, 8), asset_id: a.id, version_id: v.id, name: a.name, category: a.category, pos: [i * 0.9 - ids.length * 0.45, 0, 1.6], rotY: 0, scale: 1 }); if (!a.scenes.includes(sc.id)) a.scenes.push(sc.id); }); sc.rev = (sc.rev || 0) + 1; E.audit('加入场景', sc.code, ids.length + ' 件'); st.rev++; toast(`已加入场景 ${sc.code}`); };
+      const addToScene = async (ids) => { const sc = scenes.value[0]; if (!sc) return toast('请先在场景组装中创建场景', 'err'); const props = ids.filter(id => E.asset(id).type === 'prop'); act(() => props.forEach((id, i) => E.addSceneItem(sc.id, id, [i * 0.9 - props.length * 0.45, 0, 1.6])), `已加入场景 ${sc.code}`); };
       const exportSel = () => go('export', { assets: [...sel] });
       const download = async (a) => { const b = await assetGLB(a); const chk = glbCheck(b); E.audit('下载资产', a.code, 'GLB'); saveFile(`${a.code}_v${E.cur(a).version}.glb`, b, 'model/gltf-binary'); if (!chk.ok) toast('GLB 结构校验发现问题：' + chk.issues.join('；'), 'err'); };
       const del = async (a) => { const ok = await confirmBox({ title: '删除资产', text: `确认删除 ${a.code}？删除后保留 30 天。`, ok: '删除', danger: true }); if (ok) act(() => E.deleteAsset(a.id), '已删除'); };
@@ -258,7 +258,7 @@ new THREE.GLTFLoader().load('scene.glb',g=>s.add(g.scene));r.setAnimationLoop(()
       const doAct = (t, a) => act(() => E.taskAction(t.id, a), { pause: '已暂停', resume: '已恢复', cancel: '已取消（显存已释放）', retry: '已重新排队（沿用原参数）', pin: '已置顶：当前批次结束后优先执行', now: '已改为立即执行' }[a]);
       const g = computed(() => { st.rev; const h = E.S.gpu.history[E.S.gpu.history.length - 1] || {}; return Object.assign({ model: E.S.gpu.loaded ? E.model(E.S.gpu.loaded).name : '无' }, h); });
       const nextOrder = computed(() => { st.rev; return E.S.tasks.filter(t => t.queue === 'gpu' && t.status === 'queued').sort((a, b) => (b.priority === 'pin') - (a.priority === 'pin') || (a.model_id === E.S.gpu.loaded ? -1 : 0) - (b.model_id === E.S.gpu.loaded ? -1 : 0) || a.created_at - b.created_at).slice(0, 6); });
-      const stopNode = (n) => { n.state = 'off'; n.stopped = E.S.clock; E.S.cloudCostMonth = +(E.S.cloudCostMonth + n.cost).toFixed(2); E.audit('手动关机云节点', n.name, '¥' + n.cost); st.rev++; };
+      const stopNode = (n) => act(() => E.stopCloudNode(n.id), '已关机');
       const disk = computed(() => E.S.settings.storage);
       return { f, tasks, mins, lanes, models, log, doAct, g, nextOrder, stopNode, disk, E, D, U, st };
     },
@@ -365,7 +365,7 @@ new THREE.GLTFLoader().load('scene.glb',g=>s.add(g.scene));r.setAnimationLoop(()
       <template v-if="tab==='audit'"><div class="panel"><header><h3>审计日志</h3><span class="sub">登录、需求单提交、模型与规则变更、审核结论、导出、Agent 工具调用</span><span class="right"><input class="inp" v-model="auditQ" placeholder="筛选" style="width:200px"></span></header><div class="tbl-wrap" style="max-height:640px"><table class="tbl"><thead><tr><th>时间</th><th>操作人</th><th>动作</th><th>对象</th><th>详情</th></tr></thead><tbody><tr v-for="a in audits" :key="a.id"><td class="small">{{ U.dt(a.time) }}</td><td>{{ a.actor }}</td><td>{{ a.action }}</td><td class="mono small">{{ a.object }}</td><td class="small" style="max-width:520px;overflow-wrap:anywhere">{{ a.detail }}</td></tr></tbody></table></div></div></template>
       <template v-if="tab==='demo'"><div class="panel"><header><h3>演示控制</h3><span class="sub">仅演示版提供</span></header><div class="body stack" style="max-width:600px">
         <div class="note">演示版以确定性模拟代替模型推理：任务耗时按加速倍率压缩，几何、贴图、全景、点云由程序化生成，seed 可复现。业务规则（许可证、文博、AIGC 标识、质检、调度、状态机）与正式版一致。</div>
-        <div class="field"><label>演示加速倍率：{{ E.S.speed }}×（1 秒 = {{ E.S.speed }} 秒模拟时间）</label><input type="range" class="range" min="1" max="60" :value="E.S.speed" @input="E.S.speed=+$event.target.value" id="speed"></div>
+        <div class="field"><label>演示加速倍率：{{ E.S.speed }}×（1 秒 = {{ E.S.speed }} 秒模拟时间）</label><input type="range" class="range" min="1" max="60" :value="E.S.speed" @change="act(()=>E.setSpeed($event.target.value))" id="speed"></div>
         <div class="field"><label>发布范围</label><div class="seg"><button v-for="r in ['V1.0','V1.1','V1.2']" :key="r" :class="{on:E.S.release===r}" @click="act(()=>E.setRelease(r),'发布范围：'+r)">{{ r }}</button></div><span class="faint small">V1.0：道具资产闭环；V1.1：场景、重建、Agent 组装；V1.2：角色动画与引擎工程包</span></div>
         <button class="btn danger" @click="reset" id="btn-reset">重置演示数据</button></div></div></template>
     </div>`,

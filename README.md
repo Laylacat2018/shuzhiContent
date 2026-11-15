@@ -1,4 +1,4 @@
-# 空间内容工场 · AIGC 沉浸式空间内容生产管线平台（演示版 V1.0）
+# 空间内容工场 · AIGC 沉浸式空间内容生产管线平台（演示版 V1.1）
 
 依据《02-AIGC 沉浸式空间内容生产管线平台 PRD · 页面原型 · SPEC》开发的**商务演示版**。
 14 个页面全部可操作，PRD 第二部分的业务规则与 SPEC 的调度、状态机、质检、导出规格按文档实现；
@@ -25,17 +25,65 @@
 
 右上角可切换四种角色（产品 / 策划、3D 美术、审核人、管理员），权限按 PRD 第 2 章矩阵控制。
 
+## 三种运行形态
+
+| 形态 | 地址 | 业务引擎 | 数据 | 用途 |
+| --- | --- | --- | --- | --- |
+| **服务端版**（推荐，绑定域名） | `/` | 服务端 V8 中运行（FastAPI 托管） | 服务器 `$SCW_DATA`，同一工作区的同事共享，重启自动恢复 | 商务对外演示、团队协作 |
+| 单机版 | `/standalone` | 浏览器内 | 访问者自己的浏览器 | 离线演示、断网备用 |
+| 在线验收版 | claude.ai Artifact 链接 | 浏览器内 | 访问者自己的浏览器 | 验收 |
+
+前后端用的是**同一份业务引擎**（`web/src/engine.js`）：服务端用 V8（mini-racer）执行它，因此规则不会出现前后端不一致。
+
+- 登录：JWT（HS256）；四个演示账号对应 PRD 第 2 章四种角色，权限在服务端判定（越权返回 403）。
+- 工作区：登录时可填工作区名称。同一工作区的人看到同一份需求单、资产库和任务队列；每位商务可以给客户单独开一个工作区（如 `demo-zhang`），互不干扰。
+- 实时：页面每秒同步一次状态；`/ws/events` 按 SPEC 7.2 推送 `task.state`、`task.progress`、`gpu.metrics`、`agent.delta`、`qa.result`、`system.alert`。
+- 持久化：每 5 秒落盘到 `$SCW_DATA/workspaces/<工作区>.json`；服务重启后运行中的任务回到排队（SPEC 第 13 章“断电恢复”）。
+
+### 接口（SPEC 7.1，前缀 `/api/v1`）
+
+交互式文档：`/api/docs`。
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| POST | `/auth/login` | `{user_id, password, workspace}` → `{token}` |
+| GET / POST | `/projects` | 项目列表、创建（管理员） |
+| GET / POST | `/jobs` | 需求单列表、创建草稿 |
+| POST | `/jobs/{id}/precheck`、`/jobs/{id}/submit` | 许可证与预算预检、提交并拆分任务 |
+| GET | `/tasks?status=&job_id=` | 任务列表 |
+| POST | `/tasks/{id}/{pause\|resume\|cancel\|retry\|pin\|now}` | 任务操作 |
+| GET / POST | `/concepts`、`/concepts/generate`、`/concepts/select` | 概念图 |
+| POST | `/assets/generate3d`、`/assets/{id}/optimize` | 3D 生成、优化 |
+| GET | `/assets`、`/assets/{id}`、`/assets/{id}/versions` | 资产检索、详情、版本 |
+| POST | `/qa/{version_id}/run`、`/qa/{version_id}/review` | 自动质检、审核结论 |
+| POST | `/panoramas/generate`、`/worlds/generate` | 全景、世界生成 |
+| POST | `/recon/datasets`、`/recon/{id}/train` | 实景重建 |
+| POST | `/scenes`、`/scenes/{id}/agent/messages`、`/scenes/{id}/confirm` | 场景组装 |
+| GET / POST | `/exports`、`/exports/{id}` | 导出 |
+| GET / PUT | `/models`、`/models/{id}`；POST `/models/{id}/license` | 模型登记、授权文件 |
+| GET | `/system/gpu`、`/system/disk`、`/system/cloud` | 资源状态 |
+| GET | `/state` | 工作区完整状态（前端同步用） |
+| POST | `/rpc` | 前端页面写操作（白名单） |
+
+### 环境变量
+
+| 变量 | 默认 | 说明 |
+| --- | --- | --- |
+| `SCW_DEMO_PASSWORD` | `demo-2026` | 演示账号登录密码，**对外部署请修改** |
+| `SCW_JWT_SECRET` | 每次启动随机 | JWT 签名密钥；固定后重启不需要重新登录 |
+| `SCW_DATA` | `./data` | 工作区数据目录 |
+| `SCW_WORKSPACE` | `default` | 默认工作区 |
+| `SCW_ALLOW_FASTFORWARD` | 未开启 | 仅自测：开启 `/api/v1/debug/fastforward` |
+
 ## 演示版与正式版的差异
 
 | 项目 | 演示版 | 正式版（SPEC 第 4、5 章） |
 | --- | --- | --- |
-| 业务引擎 | 浏览器内 `web/src/engine.js`，数据存于本浏览器 localStorage | FastAPI + PostgreSQL + Celery / Redis |
+| 业务引擎 | FastAPI 进程内的 V8 执行 `engine.js`；状态存 JSON 文件 | FastAPI + PostgreSQL + Celery / Redis |
 | 模型推理 | 确定性程序化生成（同 seed 必得同结果），耗时按加速倍率压缩（系统设置 → 演示控制） | ComfyUI、TRELLIS.2 推理服务、Blender 无头、LichtFeld Studio |
 | GLB | 真实 glTF 2.0 二进制，含 PBR 贴图与 AIGC extras，通过 Khronos glTF-Validator | 同左，另加 Draco / KTX2 压缩 |
 | 3DGS / FBX | 导出 PLY 点云与 BVH 动作 | SPZ / glTF + KHR_gaussian_splatting、FBX |
 | Agent | 本地规则解析指令，调用同名工具（library.search 等） | Claude API + MCP for Blender + pipeline-mcp |
-
-每位访问者的数据只保存在自己的浏览器中，互不影响；在「系统设置 → 演示控制」可一键重置。
 
 ## 运行
 
@@ -47,6 +95,12 @@ uvicorn server.app:app --host 0.0.0.0 --port 8000
 ```
 
 浏览器打开 `http://<服务器>:8000`。健康检查：`/healthz`。
+
+部署后运行冒烟测试（SPEC 5.3 第 6 步，只用标准库）：
+
+```bash
+python3 tools/smoke_test.py http://127.0.0.1:8000 --workspace smoke
+```
 
 ### Docker
 
@@ -78,6 +132,10 @@ web/src/engine.js     业务引擎：许可证 / 文博 / AIGC 规则、GPU 调�
 web/src/viewer.js     three.js 视口（资产、场景、点云、全景、角色）
 web/src/app-core.js   外壳、登录、公共组件
 web/src/pages-*.js    P01–P14 页面
-server/app.py         FastAPI 服务
-tests/                Playwright 端到端测试、glTF 校验脚本
+server/app.py         FastAPI：REST / WebSocket / 静态页
+server/engine_host.py 服务端引擎宿主（V8、时钟、持久化、重启恢复）
+server/host.js        V8 内的工作区与事件管理
+server/auth.py        登录与 JWT
+tools/smoke_test.py   冒烟测试脚本
+tests/                端到端测试（单机版规则用例 + 服务端模式用例）、glTF 校验脚本
 ```

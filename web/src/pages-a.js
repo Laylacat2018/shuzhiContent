@@ -14,9 +14,9 @@
       const alerts = computed(() => { st.rev; return E.S.alerts.slice(0, 30).sort((a, b) => sevOrder[a.level] - sevOrder[b.level] || b.time - a.time).slice(0, 8); });
       const pending = computed(() => { st.rev; return E.S.assets.filter(a => a.project_id === E.S.currentProjectId && a.status === 'review').sort((a, b) => a.review_since - b.review_since).slice(0, 10); });
       const rw = computed(() => { st.rev; return E.reworkStats(); });
-      const readAll = () => { E.S.alerts.forEach(a => a.read = true); st.rev++; };
+      const readAll = () => act(() => E.readAlerts());
       const board = [['jobs', '需求单', 'jobs'], ['concepts', '概念图', 'concepts'], ['gen3d', '3D 生成', 'gen3d'], ['optimize', '优化', 'optimize'], ['review', '质检审核', 'review'], ['library', '已入库', 'library'], ['exported', '已导出', 'library']];
-      return { s, running, alerts, pending, rw, readAll, board, U, E, D, go, st };
+      return { s, running, alerts, pending, rw, readAll, board, U, E, D, go, st, act };
     },
     template: `<div class="page" :data-r="st.rev">
       <c-head code="P01" ver="V1.0" title="工作台" goal="查看产能、待办和异常，决定下一步处理什么。指标按当前项目统计。">
@@ -43,7 +43,7 @@
         </div>
         <div class="stack">
           <div class="panel"><header><h3>提醒</h3><span class="sub">阻断类在前</span><span class="right"><button class="btn sm ghost" @click="readAll">全部已读</button></span></header>
-            <div><div v-for="a in alerts" :key="a.id" class="alert-li" :style="{opacity: a.read ? .6 : 1}"><span class="sev" :class="a.level"></span><div style="flex:1;min-width:0">{{ a.message }}<div class="faint small">{{ U.ago(a.time) }}</div></div><button v-if="a.link" class="btn sm ghost" @click="a.read=true; go(a.link==='settings'?'system':a.link)">查看</button></div></div>
+            <div><div v-for="a in alerts" :key="a.id" class="alert-li" :style="{opacity: a.read ? .6 : 1}"><span class="sev" :class="a.level"></span><div style="flex:1;min-width:0">{{ a.message }}<div class="faint small">{{ U.ago(a.time) }}</div></div><button v-if="a.link" class="btn sm ghost" @click="act(()=>E.readAlerts(a.id)); go(a.link==='settings'?'system':a.link)">查看</button></div></div>
           </div>
           <div class="panel"><header><h3>待审核</h3><span class="sub">按等待时间排序</span></header>
             <div class="body"><div class="thumbs" style="grid-template-columns:repeat(auto-fill,minmax(78px,1fr))"><button class="thumb" v-for="a in pending" :key="a.id" @click="go('review',{asset:a.id})" :title="a.name"><img class="img" :src="U.thumbOf(a)" alt=""><div class="cap"><span class="small">{{ U.ago(a.review_since) }}</span></div></button></div><div v-if="!pending.length" class="muted small">没有待审核资产</div></div>
@@ -350,9 +350,9 @@
         ['文件大小', r.file_mb + ' MB', o ? o.file_mb + ' MB' : '—', '≤ ' + p.size_mb + ' MB', o ? o.file_mb <= p.size_mb : null],
         ['法线细节保留', '—', o ? '需目检' : '—', '不参与自动判定', 'eye']]; });
       const canEdit = computed(() => { st.rev; return E.can('optimize'); });
-      const run = (ids) => { if (preset.value === 'custom') Object.assign(E.S.settings.presets.custom, custom); act(() => E.optimize(ids, { preset: preset.value, manual: manual.value }), (t) => `已提交优化 ${t.length} 件（Blender 无头，CPU 并发 3）`); };
+      const run = (ids) => { act(() => E.optimize(ids, { preset: preset.value, manual: manual.value, custom: preset.value === 'custom' ? { tris: custom.tris, tex: custom.tex } : null }), (t) => `已提交优化 ${t.length} 件（Blender 无头，CPU 并发 3）`); };
       const sameBatch = computed(() => { const a = asset.value; if (!a) return []; return list.value.filter(x => x.job_id === a.job_id && x.id !== a.id); });
-      const toQA = () => { const a = asset.value; const v = ver.value; if (!v.opt) return toast('请先完成优化', 'err'); act(() => { E.enqueue({ job_id: a.job_id, project_id: a.project_id, node: 'auto_qa', model_id: 'blender', asset_id: a.id, version_id: v.id, params: {} }); a.status = 'qa'; }, '已送入质检'); };
+      const toQA = () => act(() => E.sendToQA(asset.value.id), '已送入质检');
       // 同步旋转
       let L = null, R = null; const onL = (v) => { L = v; link(); }, onR = (v) => { R = v; link(); };
       function link() { if (!L || !R) return; let lock = false; const cp = (a, b) => { if (lock) return; lock = true; b.camera.position.copy(a.camera.position); b.controls.target.copy(a.controls.target); b.camera.updateMatrixWorld(); lock = false; }; L.controls.addEventListener('change', () => cp(L, R)); R.controls.addEventListener('change', () => cp(R, L)); }
