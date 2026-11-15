@@ -114,6 +114,9 @@ if want --trellis2; then
   [[ -d "$SCW_HOME/TRELLIS.2" ]] || git clone -b main --recursive https://github.com/microsoft/TRELLIS.2.git "$SCW_HOME/TRELLIS.2"
   export CUDA_HOME="${CUDA_HOME:-/usr/local/cuda-12.4}"
   export CONDA_ALWAYS_YES=true PIP_NO_INPUT=1   # 无人值守：conda / pip 不再停下来询问
+  # 链接 -lcuda：WSL 的 libcuda.so 在 /usr/lib/wsl/lib，原生 Linux 可回退到 CUDA Toolkit 的 stubs
+  export LIBRARY_PATH="/usr/lib/wsl/lib:$CUDA_HOME/lib64/stubs:${LIBRARY_PATH:-}"
+  export PATH="$CUDA_HOME/bin:$PATH"
   # shellcheck disable=SC1091
   source "$CONDA_DIR/etc/profile.d/conda.sh"
   cd "$SCW_HOME/TRELLIS.2"
