@@ -303,7 +303,8 @@ new THREE.GLTFLoader().load('scene.glb',g=>s.add(g.scene));r.setAnimationLoop(()
       const audits = computed(() => { st.rev; const q = auditQ.value; return E.S.audit.filter(a => !q || (a.action + a.object + a.detail + a.actor).includes(q)).slice(0, 200); });
       const reset = async () => { const ok = await confirmBox({ title: '重置演示数据', text: '将清空本浏览器中的全部演示数据并重新生成初始数据。', ok: '重置', danger: true }); if (ok) { E.reset(); st.rev++; toast('演示数据已重置'); } };
       const presetKeys = ['quest3', 'pico4', 'quest2', 'webxr', 'xr_space', 'custom'];
-      return { tab, tabs, setScope, nm, reg, up, upload, onFile, scopeMatrix, setRule, setSet, auditQ, audits, reset, presetKeys, E, D, U, st, act };
+      const VERSION = window.SCW_VERSION || ''; const MODE = window.SCW_MODE || '';
+      return { VERSION, MODE, tab, tabs, setScope, nm, reg, up, upload, onFile, scopeMatrix, setRule, setSet, auditQ, audits, reset, presetKeys, E, D, U, st, act };
     },
     template: `<div class="page" :data-r="st.rev">
       <c-head code="P14" ver="V1.0" title="系统设置" goal="管理模型、许可证、规则和外部服务。仅管理员可访问。"></c-head>
@@ -367,6 +368,7 @@ new THREE.GLTFLoader().load('scene.glb',g=>s.add(g.scene));r.setAnimationLoop(()
         <div class="note">演示版以确定性模拟代替模型推理：任务耗时按加速倍率压缩，几何、贴图、全景、点云由程序化生成，seed 可复现。业务规则（许可证、文博、AIGC 标识、质检、调度、状态机）与正式版一致。</div>
         <div class="field"><label>演示加速倍率：{{ E.S.speed }}×（1 秒 = {{ E.S.speed }} 秒模拟时间）</label><input type="range" class="range" min="1" max="60" :value="E.S.speed" @change="act(()=>E.setSpeed($event.target.value))" id="speed"></div>
         <div class="field"><label>发布范围</label><div class="seg"><button v-for="r in ['V1.0','V1.1','V1.2']" :key="r" :class="{on:E.S.release===r}" @click="act(()=>E.setRelease(r),'发布范围：'+r)">{{ r }}</button></div><span class="faint small">V1.0：道具资产闭环；V1.1：场景、重建、Agent 组装；V1.2：角色动画与引擎工程包</span></div>
+        <div class="kv small"><div>发布版本</div><div class="mono">v{{ VERSION }}</div><div>运行形态</div><div>{{ ({server:'服务端版', local:'单机版', artifact:'在线验收版'})[MODE] || MODE }}</div></div>
         <button class="btn danger" @click="reset" id="btn-reset">重置演示数据</button></div></div></template>
     </div>`,
   };

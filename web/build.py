@@ -23,6 +23,7 @@ LIBS = [
 def build():
     DIST.mkdir(exist_ok=True)
     tpl = (SRC / 'index.template.html').read_text(encoding='utf-8')
+    version = (ROOT.parent / 'VERSION').read_text(encoding='utf-8').strip()
     css = (SRC / 'app.css').read_text(encoding='utf-8')
     js = '\n;\n'.join((SRC / f).read_text(encoding='utf-8') for f in JS_ORDER)
     # 预编译模板（vue.runtime 无编译器，不需要 eval）
@@ -30,7 +31,7 @@ def build():
     js = js.replace('</script', '<\\/script')
     def page(mode, libs):
         return (tpl.replace('/*__CSS__*/', css).replace('/*__JS__*/', js)
-                .replace('__MODE__', mode).replace('<!--__LIBS__-->', libs))
+                .replace('__MODE__', mode).replace('__VERSION__', version).replace('<!--__LIBS__-->', libs))
     cdn = '\n'.join(f'<script src="{u}"></script>' for _, u in LIBS)
     local = '\n'.join(f'<script src="vendor/{p.split("/")[0]}/{pathlib.Path(p).name}"></script>' for p, _ in LIBS)
     # 服务端引擎包（与前端同一份业务引擎）

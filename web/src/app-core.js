@@ -75,7 +75,11 @@
     if (!S) return;
     if (net.pid && S.projects.some(p => p.id === net.pid)) S.currentProjectId = net.pid; else net.pid = S.currentProjectId;
     if (net.uid) S.currentUserId = net.uid;
-    E.S = S; st.rev++;
+    E.S = S;
+    // 正在编辑绑定服务端状态的输入框时，暂缓刷新界面，避免同步覆盖未提交的输入
+    const ae = document.activeElement;
+    if (ae && ae.hasAttribute && ae.hasAttribute('data-draft')) { if (!net.deferred) { net.deferred = true; ae.addEventListener('blur', () => { net.deferred = false; setTimeout(() => st.rev++, 0); }, { once: true }); } return; }
+    st.rev++;
   }
   function serverLogin(uid, password, ws) {
     const r = xhr('POST', '/api/v1/auth/login', { user_id: uid, password, workspace: ws || net.ws || undefined });
@@ -241,7 +245,7 @@
         if (!matchMedia('(prefers-reduced-motion: reduce)').matches) raf = requestAnimationFrame(loop); else loop(0);
       });
       onUnmounted(() => cancelAnimationFrame(raf));
-      return { uid, enter, canvas, E, D, pw, wsName, err, SERVER };
+      return { uid, enter, canvas, E, D, pw, wsName, err, SERVER, VERSION: global.SCW_VERSION || '' };
     },
     template: `<div class="login">
       <div class="art"><canvas ref="canvas" aria-hidden="true"></canvas>
@@ -259,7 +263,7 @@
         <div class="field" v-if="SERVER"><label for="ws">工作区</label><input id="ws" class="inp" v-model="wsName" placeholder="default"><span class="faint small">同一工作区的同事共享需求单、资产库与任务队列；对外演示可另开工作区（如 demo-zhang），互不干扰。</span></div>
         <div class="note err" v-if="err">{{ err }}</div>
         <button class="btn primary" type="submit" id="login-btn" style="padding:9px">进入平台</button>
-        <p class="faint small">局域网访问 · 账号登录 · 角色权限（PRD 第 2 章权限矩阵）</p>
+        <p class="faint small">局域网访问 · 账号登录 · 角色权限（PRD 第 2 章权限矩阵）· v{{ VERSION }}</p>
       </form>
     </div>`,
   };

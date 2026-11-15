@@ -29,7 +29,7 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 DIST = pathlib.Path(os.environ.get("SCW_DIST", ROOT / "dist"))
 DATA = pathlib.Path(os.environ.get("SCW_DATA", ROOT / "data"))
 DEFAULT_WS = os.environ.get("SCW_WORKSPACE", "default")
-VERSION = "1.1.0"
+VERSION = (ROOT / "VERSION").read_text("utf-8").strip() if (ROOT / "VERSION").exists() else "1.0.0"
 log = logging.getLogger("scw")
 
 # 前端可通过 /api/v1/rpc 调用的引擎写操作（权限仍由引擎按当前登录角色判定）
