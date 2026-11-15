@@ -113,6 +113,7 @@ if want --trellis2; then
   [[ -x "$CONDA_DIR/bin/conda" ]] || { echo "需要先安装 --conda"; exit 1; }
   [[ -d "$SCW_HOME/TRELLIS.2" ]] || git clone -b main --recursive https://github.com/microsoft/TRELLIS.2.git "$SCW_HOME/TRELLIS.2"
   export CUDA_HOME="${CUDA_HOME:-/usr/local/cuda-12.4}"
+  export CONDA_ALWAYS_YES=true PIP_NO_INPUT=1   # 无人值守：conda / pip 不再停下来询问
   # shellcheck disable=SC1091
   source "$CONDA_DIR/etc/profile.d/conda.sh"
   cd "$SCW_HOME/TRELLIS.2"
