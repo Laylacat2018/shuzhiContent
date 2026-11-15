@@ -117,9 +117,19 @@ if want --trellis2; then
   # shellcheck disable=SC1091
   source "$CONDA_DIR/etc/profile.d/conda.sh"
   cd "$SCW_HOME/TRELLIS.2"
-  if ! conda env list | grep -q '^trellis2 '; then
-    . ./setup.sh --new-env --basic --flash-attn --nvdiffrast --nvdiffrec --cumesh --o-voxel --flexgemm
+  # 分步安装，可重复运行：已完成的步骤自动跳过
+  conda env list | grep -q '^trellis2 ' || . ./setup.sh --new-env --basic
+  conda activate trellis2
+  python -c "import torch, kornia, timm" 2>/dev/null || . ./setup.sh --basic
+  # 官方脚本安装 flash-attn 时未加 --no-build-isolation，隔离构建环境里找不到 torch 会失败；
+  # 加上后安装程序会先尝试下载匹配 torch/CUDA/Python 的预编译包，下载不到再从源码编译（限制并发避免内存不足）
+  python -c "import flash_attn" 2>/dev/null || MAX_JOBS="${MAX_JOBS:-8}" pip install flash-attn==2.7.3 --no-build-isolation
+  if [[ ! -f "$SCW_HOME/.trellis2_ext_ok" ]]; then
+    rm -rf /tmp/extensions
+    . ./setup.sh --nvdiffrast --nvdiffrec --cumesh --o-voxel --flexgemm
+    python -c "import o_voxel, nvdiffrast" && touch "$SCW_HOME/.trellis2_ext_ok"
   fi
+  conda deactivate
   conda activate trellis2 && pip install -q huggingface_hub psutil && conda deactivate
   cd - >/dev/null
 fi
