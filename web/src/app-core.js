@@ -3,7 +3,7 @@
   'use strict';
   const { reactive, ref, computed, watch, onMounted, onUnmounted, nextTick, h } = Vue;
   const E = global.Engine, Geo = global.Geo, V = global.Viewers, D = E.dict;
-  const st = reactive({ rev: 0, route: 'workbench', params: {}, toasts: [], modal: null, logged: false, drawer: null, booting: true, theme: '' });
+  const st = reactive({ rev: 0, route: 'workbench', params: {}, toasts: [], modal: null, logged: false, drawer: null, booting: true, theme: '', production: false });
   global.SCW = { st };
 
   // ---------- 工具 ----------
@@ -22,7 +22,7 @@
     loc: (m) => ({ local: '本地 GPU', 'local-cpu': '本地 CPU', cloud: '云 GPU', api: '商业 API' }[m.location] || m.location),
     color: (key) => { const h = Geo.hash(key || 'x') % 360; return `hsl(${h} 42% 42%)`; },
     stats: (v) => v ? (v.opt || v.raw || {}) : {},
-    thumbOf: (a) => { if (!a) return ''; const v = E.cur(a); if (!v) return ''; if (a.type === 'prop') { const s = v.opt || v.raw; return V.thumbnail({ category: v.category, seed: v.seed, tris: s.tris, texture: 256 }); } if (a.type === 'world' && v.pano_id) { const p = E.S.panoramas.find(x => x.id === v.pano_id); return p ? V.panoCanvas(p, 512).toDataURL('image/jpeg', 0.7) : ''; } return reconThumb(a); },
+    thumbOf: (a) => { if (!a) return ''; const v = E.cur(a); if (!v) return ''; if (v.file_id) { const c = E.S.concepts.find(c => c.id === a.concept_id); return c ? c.url : ''; } if (a.type === 'prop') { const s = v.opt || v.raw; return V.thumbnail({ category: v.category, seed: v.seed, tris: s.tris, texture: 256 }); } if (a.type === 'world' && v.pano_id) { const p = E.S.panoramas.find(x => x.id === v.pano_id); return p ? V.panoCanvas(p, 512).toDataURL('image/jpeg', 0.7) : ''; } return reconThumb(a); },
   };
   let reconThumbUrl = null;
   function reconThumb() {
@@ -55,6 +55,18 @@
   }
   // ---------- 服务端模式：业务引擎在服务端运行，页面写操作经 /api/v1/rpc，状态每秒同步 ----------
   const SERVER = global.SCW_MODE === 'server';
+  async function uploadFiles(inputFiles) {
+    const result = [];
+    for (const file of inputFiles) {
+      const form = new FormData(); form.append('file', file);
+      const response = await fetch('/api/v1/files', { method: 'POST', headers: { Authorization: 'Bearer ' + net.token }, body: form });
+      const data = await response.json(); if (!response.ok) throw new Error(data.detail || '上传失败'); result.push(data);
+    }
+    return result;
+  }
+  function chooseUpload(accept) {
+    return new Promise((resolve, reject) => { const input = document.createElement('input'); input.type = 'file'; input.accept = accept; input.onchange = async () => { try { resolve((await uploadFiles(input.files))[0]); } catch (e) { reject(e); } }; input.oncancel = () => resolve(null); input.click(); });
+  }
   const RPC_FNS = ['createJob', 'updateJob', 'submitJob', 'cancelJob', 'deleteJob', 'taskAction', 'review', 'manualResolve', 'rollback', 'generateConcepts', 'selectConcepts', 'discardConcepts', 'regenerate3d', 'discardAsset', 'optimize', 'sendToQA', 'tagAssets', 'deleteAsset', 'generatePanoramas', 'fixSeam', 'upscalePano', 'submitWorld', 'createDataset', 'appendPhotos', 'solvePoses', 'trainGS', 'cleanRecon', 'finishRecon', 'createCharacter', 'rigCharacter', 'confirmWeights', 'genMotion', 'addClip', 'updateClip', 'removeClip', 'createScene', 'agentSend', 'agentConfirm', 'sceneConfirm', 'addStill', 'moveItem', 'scaleItem', 'addSceneItem', 'createExport', 'updateModel', 'registerModel', 'uploadLicense', 'confirmLicense', 'updateSettings', 'setRelease', 'setSpeed', 'autoFix', 'runQA', 'enqueue', 'audit', 'patch', 'togglePanoUse', 'readAlerts', 'stopCloudNode', 'setViewport', 'createProject'];
   const net = { token: '', uid: '', pid: '', ws: '', rev: -1, busy: false, password: '' };
   try { net.token = sessionStorage.getItem('scw.token') || ''; net.uid = sessionStorage.getItem('scw.uid') || ''; net.pid = sessionStorage.getItem('scw.pid') || ''; net.ws = sessionStorage.getItem('scw.ws') || ''; } catch (e) { }
@@ -107,7 +119,7 @@
     E.save = function () { };
     E.tick = function () { };
   }
-  Object.assign(global.SCW, { toast, act, go, confirmBox, saveFile, U, ARTIFACT, SERVER, net, serverLogin });
+  Object.assign(global.SCW, { toast, act, go, confirmBox, saveFile, U, ARTIFACT, SERVER, net, serverLogin, uploadFiles, chooseUpload });
 
   // ---------- 公共组件 ----------
   const C = {};
@@ -192,7 +204,7 @@
       const role = computed(() => { st.rev; return E.user().role; });
       const switchUser = (uid) => { if (SERVER) { try { serverLogin(uid, net.password || 'demo-2026'); } catch (e) { toast(e.message, 'err'); return; } toast('已切换为 ' + E.user().name + '（' + D.ROLES[E.user().role] + '）'); return; } E.S.currentUserId = uid; E.audit('切换账号', E.user().name, D.ROLES[E.user().role]); st.rev++; E.save(); toast('已切换为 ' + E.user().name + '（' + D.ROLES[E.user().role] + '）'); };
       const switchProject = (pid) => { if (SERVER) { net.pid = pid; persistNet(); } E.S.currentProjectId = pid; st.rev++; E.save(); toast('已切换项目：' + E.project().name); };
-      const logout = () => { st.logged = false; net.token = ''; persistNet(); try { sessionStorage.removeItem('scw.logged'); } catch (e) { } };
+      const logout = () => { if(SERVER)fetch('/api/v1/auth/logout',{method:'POST'}).catch(()=>{}); st.logged = false; net.token = ''; net.password = ''; persistNet(); try { sessionStorage.removeItem('scw.logged'); } catch (e) { } };
       const theme = () => { const cur = document.documentElement.getAttribute('data-theme'); const dark = cur ? cur === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches; document.documentElement.setAttribute('data-theme', dark ? 'light' : 'dark'); };
       return { st, E, D, NAV, pageComp, item, top, alerts, locked, role, go, switchUser, switchProject, logout, theme, U };
     },
@@ -210,7 +222,7 @@
           <button class="chip" style="cursor:pointer" @click="go('workbench')">提醒 <b class="num" :style="{color: alerts ? 'var(--err)' : ''}">{{ alerts }}</b></button>
         </div>
         <div class="top-right">
-          <select class="inp" style="width:auto" :value="E.S.currentUserId" @change="switchUser($event.target.value)" aria-label="切换账号" id="user-switch">
+          <select class="inp" style="width:auto" :disabled="st.production" :value="E.S.currentUserId" @change="switchUser($event.target.value)" aria-label="切换账号" id="user-switch">
             <option v-for="u in E.S.users" :key="u.id" :value="u.id">{{ u.name }} · {{ D.ROLES[u.role] }}</option>
           </select>
           <button class="btn sm ghost" @click="theme" title="切换明暗">◐</button>
@@ -236,7 +248,7 @@
 
   const Login = {
     setup() {
-      const uid = ref('u_pm'); const canvas = ref(null); let raf; const pw = ref('demo-2026'); const wsName = ref(net.ws || 'default'); const err = ref('');
+      const uid = ref('u_pm'); const canvas = ref(null); let raf; const pw = ref(st.production ? '' : 'demo-2026'); const wsName = ref(net.ws || 'default'); const err = ref('');
       const enter = () => { if (SERVER) { err.value = ''; try { serverLogin(uid.value, pw.value, wsName.value.trim().toLowerCase()); st.logged = true; } catch (e) { err.value = e.message; } return; } E.S.currentUserId = uid.value; E.audit('登录', E.user().name, D.ROLES[E.user().role] + '（演示账号，JWT 由部署版后端签发）'); st.logged = true; try { sessionStorage.setItem('scw.logged', '1'); } catch (e) { } E.save(); };
       onMounted(() => {
         const c = canvas.value; const x = c.getContext('2d'); const pts = []; const R = Geo.rng(42);
@@ -255,7 +267,7 @@
       </div>
       <form class="form" @submit.prevent="enter">
         <h2 style="font-family:var(--f-display);font-size:22px">登录</h2>
-        <div class="note">{{ SERVER ? '选择账号登录（演示密码 demo-2026，可由管理员通过环境变量修改）。登录后可在右上角切换账号，体验不同角色的权限。' : '演示环境：选择一个角色登录，可随时在右上角切换账号，体验不同角色的权限。' }}</div>
+        <div class="note">{{ st.production ? '真实生产环境：请选择账号，输入管理员提供的该账号密码。' : SERVER ? '选择账号登录（演示密码 demo-2026，可由管理员通过环境变量修改）。登录后可在右上角切换账号，体验不同角色的权限。' : '演示环境：选择一个角色登录，可随时在右上角切换账号，体验不同角色的权限。' }}</div>
         <div class="role-pick">
           <button type="button" v-for="u in E.S.users" :key="u.id" :class="{on: uid===u.id}" @click="uid=u.id"><b>{{ u.name }}</b><span>{{ D.ROLES[u.role] }}</span></button>
         </div>
@@ -272,7 +284,7 @@
   global.SCW.boot = function (pages) {
     const app = Vue.createApp({
       setup() { return { st }; },
-      template: `<div v-if="st.booting" class="boot">正在初始化演示数据…</div><template v-else><c-login v-if="!st.logged"></c-login><c-shell v-else></c-shell></template><c-modal></c-modal><c-toasts></c-toasts>`,
+      template: `<div v-if="st.booting" class="boot">正在初始化工作区…</div><template v-else><c-login v-if="!st.logged"></c-login><c-shell v-else></c-shell></template><c-modal></c-modal><c-toasts></c-toasts>`,
     });
     const reg = (name, c) => app.component(name, c);
     reg('c-pill', C.Pill); reg('c-switch', C.Switch); reg('c-steps', C.Steps); reg('c-progress', C.Progress); reg('c-head', C.PageHead); reg('c-vram', C.VramChart); reg('c-line', C.LineChart); reg('c-asset-view', C.AssetView); reg('c-modal', C.Modal); reg('c-toasts', C.Toasts); reg('c-locked', C.Locked); reg('c-shell', Shell); reg('c-login', Login);
@@ -283,6 +295,7 @@
     setTimeout(() => {
       const h = (location.hash || '').replace('#', ''); if (ROUTES.some(r => r.r === h)) st.route = h;
       if (SERVER) {
+        try { st.production = xhr('GET', '/api/v1/info').execution_mode === 'production'; } catch (e) { }
         installServerEngine();
         E.S = { users: [{ id: 'u_pm', name: '林策划', role: 'pm' }, { id: 'u_art', name: '周美术', role: 'artist' }, { id: 'u_rev', name: '陈审核', role: 'reviewer' }, { id: 'u_admin', name: '王管理', role: 'admin' }] };
         st.logged = !!net.token && pull(true);

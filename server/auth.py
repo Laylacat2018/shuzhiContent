@@ -12,6 +12,7 @@ import json
 import os
 import secrets
 import time
+from pathlib import Path
 
 SECRET = (os.environ.get("SCW_JWT_SECRET") or secrets.token_hex(32)).encode()
 DEMO_PASSWORD = os.environ.get("SCW_DEMO_PASSWORD", "demo-2026")
@@ -22,6 +23,7 @@ USERS = {
     "u_rev": {"name": "陈审核", "role": "reviewer"},
     "u_admin": {"name": "王管理", "role": "admin"},
 }
+CREDENTIALS = json.loads(Path(os.environ['SCW_ACCOUNTS_FILE']).read_text('utf-8')) if os.environ.get('SCW_ACCOUNTS_FILE') else None
 
 
 def _b64(b: bytes) -> str:
@@ -54,4 +56,9 @@ def verify(token: str) -> dict | None:
 
 
 def check_password(uid: str, password: str) -> bool:
+    if CREDENTIALS is not None:
+        record = CREDENTIALS.get(uid)
+        if not record or uid not in USERS: return False
+        actual = hashlib.scrypt(password.encode(), salt=bytes.fromhex(record['salt']), n=16384, r=8, p=1).hex()
+        return hmac.compare_digest(actual, record['hash'])
     return uid in USERS and hmac.compare_digest(password or "", DEMO_PASSWORD)

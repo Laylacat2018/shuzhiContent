@@ -17,6 +17,7 @@
   },
   "homepage": "https://github.com/Laylacat2018/shuzhiContent#readme",
   "devDependencies": {
+    "@gltf-transform/cli": "4.2.1",
     "gltf-validator": "2.0.0-dev.3.10",
     "jszip": "3.10.1",
     "three": "0.128.0",

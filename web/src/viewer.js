@@ -106,6 +106,7 @@
   AssetViewer.prototype.show = function (info, mode) {
     // info: {category, seed, tris, texture, defects}
     this.info = info; this.mode = mode || this.mode;
+    if (info.file_url) { this.showFile(info, this.mode); return { tris: info.tris, verts: info.verts || 0 }; }
     const m = cachedMesh({ category: info.category, seed: info.seed, defects: info.defects || {} }, info.tris);
     this.meshData = m;
     if (this.obj) { this.scene.remove(this.obj); this.obj.geometry.dispose(); }
@@ -116,6 +117,39 @@
     this.scene.add(this.obj);
     if (!this.framed || this.framedKey !== info.category) { this.frame(m.bbox); this.framed = true; this.framedKey = info.category; }
     return m;
+  };
+  AssetViewer.prototype.showFile = function (info, mode) {
+    if (this.fileUrl === info.file_url && this.realObject) { this.fileMode(mode); return; }
+    this.fileUrl = info.file_url; const key = this.fileUrl;
+    if (!T.GLTFLoader) throw new Error('GLTFLoader 未加载');
+    const loader = new T.GLTFLoader();
+    loader.load(key, gltf => {
+      if (!this.alive || this.fileUrl !== key) return;
+      if (this.obj) this.scene.remove(this.obj);
+      if (this.realObject) { this.scene.remove(this.realObject); this.realObject.traverse(o => { if (o.geometry) o.geometry.dispose(); }); }
+      this.realObject = gltf.scene; this.realObject.traverse(o => { if (o.isMesh) o.userData.originalMaterial = o.material; });
+      this.scene.add(this.realObject); const b = new T.Box3().setFromObject(this.realObject);
+      this.frame({ min: b.min.toArray(), max: b.max.toArray() }); this.fileMode(this.mode);
+    }, undefined, e => { console.error('真实 GLB 加载失败', e); });
+  };
+  AssetViewer.prototype.fileMode = function (mode) {
+    if (!this.realObject) return;
+    this.realObject.traverse(o => {
+      if (!o.isMesh) return;
+      if (o.userData.modeMaterial) { o.userData.modeMaterial.dispose(); delete o.userData.modeMaterial; }
+      const source = o.userData.originalMaterial;
+      const m = Array.isArray(source) ? source[0] : source;
+      let next;
+      if (mode === 'wire') next = new T.MeshBasicMaterial({ color: 0x2c7a6b, wireframe: true });
+      else if (mode === 'normal') next = new T.MeshNormalMaterial();
+      else if (mode === 'uv') next = new T.MeshBasicMaterial({ map: checkerTex() });
+      else if (mode === 'basecolor') next = new T.MeshBasicMaterial({ map: m.map, color: m.color });
+      else if (mode === 'metal' || mode === 'rough') {
+        const ch = mode === 'metal' ? 'b' : 'g'; const tex = mode === 'metal' ? m.metalnessMap : m.roughnessMap; const value = mode === 'metal' ? m.metalness : m.roughness;
+        next = new T.ShaderMaterial({ uniforms: { channelMap: { value: tex }, factor: { value }, hasMap: { value: !!tex } }, vertexShader: 'varying vec2 vUv; void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}', fragmentShader: 'uniform sampler2D channelMap; uniform float factor; uniform bool hasMap; varying vec2 vUv; void main(){float v=factor;if(hasMap)v*=texture2D(channelMap,vUv).' + ch + ';gl_FragColor=vec4(vec3(v),1.0);}' });
+      } else { o.material = source; return; }
+      o.userData.modeMaterial = next; o.material = next;
+    });
   };
   AssetViewer.prototype.setMode = function (mode) { if (this.info) this.show(this.info, mode); };
 
@@ -275,6 +309,7 @@
   }
   const conceptCache = new Map();
   function conceptURL(c, size, view) {
+    if (c.url) return c.url;
     const key = c.id + '|' + (size || 256) + '|' + (view || 'front');
     if (conceptCache.has(key)) return conceptCache.get(key);
     const cv = document.createElement('canvas'); cv.width = cv.height = size || 256;

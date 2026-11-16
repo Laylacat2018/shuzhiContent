@@ -284,7 +284,8 @@
     if (pre.content_type === 'prop') {
       const prompt = job.description || job.title;
       const batches = Math.max(1, Math.ceil(job.quantity * 1.5 / 8));
-      for (let b = 0; b < Math.min(batches, 6); b++) enqueue({ job_id: job.id, node: 'concept_image', model_id: job.nodeModels.concept_image, params: { prompt, negative: '模糊，低清，多余物体，文字水印', size: 1024, batch: 8, remove_bg: true, three_view: false, lora: job.style_lora || '', lora_weight: 0.8, seed: (Geo.hash(job.id) + b * 101) % 99999 } });
+      const batchLimit = E.S.runtime?.mode === 'production' ? batches : Math.min(batches, 6);
+      for (let b = 0; b < batchLimit; b++) enqueue({ job_id: job.id, node: 'concept_image', model_id: job.nodeModels.concept_image, params: { prompt, negative: '模糊，低清，多余物体，文字水印', size: 1024, batch: 8, remove_bg: true, three_view: false, lora: job.style_lora || '', lora_weight: 0.8, seed: (Geo.hash(job.id) + b * 101) % 99999 } });
     }
     job.status = 'producing';
     emit('job.state', job);
@@ -1248,7 +1249,7 @@
   };
   E.init = function (opts) {
     opts = opts || {};
-    if (opts.fresh || !E.load()) { E.S = freshState(); seedDemo(); E.save(); }
+    if (opts.fresh || !E.load()) { E.S = freshState(); if (!opts.empty) seedDemo(); E.save(); }
     E.S.clock = Math.max(E.S.clock, Date.now());
     return E;
   };

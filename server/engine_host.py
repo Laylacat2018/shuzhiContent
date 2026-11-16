@@ -38,12 +38,14 @@ class EngineHost:
         self.ctx = MiniRacer()
         bundle = dist / "engine-bundle.js"
         if not bundle.exists():  # 开发环境：直接读源码
-            bundle_src = "\n;\n".join((ROOT / "web" / "src" / f).read_text("utf-8") for f in ("geometry.js", "engine.js"))
+            bundle_src = "\n;\n".join((ROOT / "web" / "src" / f).read_text("utf-8") for f in ("geometry.js", "engine.js", "production.js"))
         else:
             bundle_src = bundle.read_text("utf-8")
         self.ctx.eval("var globalThis = this;")
         self.ctx.eval(bundle_src)
         self.ctx.eval((pathlib.Path(__file__).parent / "host.js").read_text("utf-8"))
+        self.production = os.environ.get("SCW_MODE", "demo") == "production"
+        self.ctx.eval("HOST.production = " + str(self.production).lower())
         self._saved_rev: dict[str, int] = {}
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
@@ -56,6 +58,8 @@ class EngineHost:
                 n = self.ctx.call("hostLoad", f.stem, f.read_text("utf-8"))
                 log.info("恢复工作区 %s（%s 个运行中任务回到排队）", f.stem, n)
             except Exception as e:  # 损坏的文件不阻止启动
+                if self.production:
+                    raise RuntimeError(f"真实工作区 {f.stem} 恢复失败，保留原始数据并停止启动") from e
                 log.error("工作区 %s 恢复失败：%s", f.stem, e)
 
     def workspaces(self) -> list[str]:
@@ -82,6 +86,8 @@ class EngineHost:
     def call(self, ws: str, uid: str, pid: str | None, fn: str, args: list | None = None) -> Any:
         with self.lock:
             r = json.loads(self.ctx.call("hostCall", ws, uid, pid or "", fn, json.dumps(args or [], ensure_ascii=False)))
+            if self.production:
+                self._save(ws)
         if not r["ok"]:
             raise BizError(r["error"], r.get("code") or "rule")
         return r["result"]
@@ -121,8 +127,15 @@ class EngineHost:
     def _save(self, ws: str) -> None:
         data = self.ctx.call("hostState", ws)
         tmp = self.data_dir / f"{ws}.json.tmp"
-        tmp.write_text(data, "utf-8")
+        with tmp.open('w', encoding='utf-8') as stream:
+            stream.write(data)
+            stream.flush()
+            if self.production: os.fsync(stream.fileno())
         tmp.replace(self.data_dir / f"{ws}.json")
+        if self.production and os.name!='nt':
+            fd=os.open(self.data_dir,os.O_RDONLY|os.O_DIRECTORY)
+            try:os.fsync(fd)
+            finally:os.close(fd)
         self._saved_rev[ws] = int(self.ctx.call("hostRev", ws))
 
     def save_all(self) -> None:

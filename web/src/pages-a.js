@@ -77,7 +77,7 @@
       const stepNames = ['基本信息', '内容类型', '目标平台', '管线模板', '确认提交'];
       const next = () => { if (step.value === 0 && !f.title) return toast('请填写需求名称', 'err'); if (step.value === 1 && f.is_heritage === null) return toast('“是否文物本体”为必填项', 'err'); if (step.value === 2 && !f.platforms.length) return toast('请至少选择一个目标平台', 'err'); step.value = Math.min(4, step.value + 1); };
       const togglePlat = (p) => { const i = f.platforms.indexOf(p); i >= 0 ? f.platforms.splice(i, 1) : f.platforms.push(p); };
-      const onRef = (e) => { f.ref_images = [...e.target.files].map(x => x.name); };
+      const onRef = async (e) => { try { f.ref_images = E.S.runtime?.mode === 'production' ? await global.SCW.uploadFiles(e.target.files) : [...e.target.files].map(x => x.name); } catch (err) { toast(err.message, 'err'); } };
       const save = (submit) => {
         const payload = JSON.parse(JSON.stringify(f));
         const j = act(() => { let job; if (editing.value) job = E.updateJob(editing.value, payload); else job = E.createJob(payload); if (submit) E.submitJob(job.id); return job; }, submit ? (j) => `已提交 ${j.code}，任务已拆分进入队列` : '已存为草稿');
@@ -104,7 +104,7 @@
                 <div class="field"><label class="req" for="job-title">需求名称</label><input id="job-title" class="inp" v-model="f.title" placeholder="例：展厅陪衬道具 · 青铜器与宫灯"></div>
                 <div class="field"><label for="job-project">所属项目</label><select id="job-project" class="inp" v-model="f.project_id"><option v-for="p in E.S.projects" :value="p.id" :key="p.id">{{ p.name }}</option></select></div>
                 <div class="field"><label for="job-qty">数量（件）</label><input id="job-qty" class="inp" type="number" min="1" max="500" v-model.number="f.quantity"></div>
-                <div class="field"><label for="job-ref">参考图上传</label><input id="job-ref" class="inp" type="file" multiple accept="image/*" @change="onRef"><span class="faint small" v-if="f.ref_images.length">{{ f.ref_images.join('、') }}</span></div>
+                <div class="field"><label for="job-ref">参考图上传</label><input id="job-ref" class="inp" type="file" multiple accept="image/*" @change="onRef"><span class="faint small" v-if="f.ref_images.length">{{ f.ref_images.map(x=>x.name||x).join('、') }}</span></div>
               </div>
               <div class="field"><label for="job-desc">需求描述（将预填为概念图提示词）</label><textarea id="job-desc" class="inp" rows="4" v-model="f.description" placeholder="例：商周风格青铜鼎与明清宫灯，陪衬展柜两侧，写实 PBR 材质"></textarea></div>
             </template>
@@ -263,7 +263,7 @@
       const asset = computed(() => { st.rev; return selId.value && E.S.assets.find(a => a.id === selId.value); });
       const ver = computed(() => asset.value && E.cur(asset.value));
       const mode = ref('solid');
-      const info = computed(() => { const v = ver.value; if (!v || !v.raw) return null; return { category: v.category, seed: v.seed, tris: v.raw.target || v.raw.tris, texture: v.raw.texture, defects: {} }; });
+      const info = computed(() => { const v = ver.value; if (!v || !v.raw) return null; return { file_url: v.raw_file_id ? '/api/v1/files/' + v.raw_file_id : v.file_url, category: v.category, seed: v.seed, tris: v.raw.target || v.raw.tris, texture: v.raw.texture, defects: {} }; });
       const multi = reactive(new Set());
       const scope = computed(() => asset.value ? E.scopeOf(asset.value.project_id, asset.value.job_id) : E.project());
       const models = computed(() => { st.rev; return E.modelsFor('image_to_3d', scope.value); });
@@ -337,10 +337,10 @@
       const custom = reactive(Object.assign({}, E.S.settings.presets.custom));
       watch(ver, (v) => { if (v) preset.value = v.preset || (asset.value && asset.value.preset) || 'quest3'; }, { immediate: true });
       const P_ = computed(() => preset.value === 'custom' ? custom : E.S.settings.presets[preset.value]);
-      const rawInfo = computed(() => ver.value && ver.value.raw ? { category: ver.value.category, seed: ver.value.seed, tris: ver.value.raw.target || ver.value.raw.tris, texture: ver.value.raw.texture } : null);
-      const optInfo = computed(() => ver.value && ver.value.opt ? { category: ver.value.category, seed: ver.value.seed, tris: ver.value.opt.target || ver.value.opt.tris, texture: ver.value.opt.texture } : null);
+      const rawInfo = computed(() => ver.value && ver.value.raw ? { file_url: ver.value.raw_file_id ? '/api/v1/files/' + ver.value.raw_file_id : ver.value.file_url, category: ver.value.category, seed: ver.value.seed, tris: ver.value.raw.target || ver.value.raw.tris, texture: ver.value.raw.texture } : null);
+      const optInfo = computed(() => ver.value && ver.value.opt ? { file_url: ver.value.file_url, category: ver.value.category, seed: ver.value.seed, tris: ver.value.opt.target || ver.value.opt.tris, texture: ver.value.opt.texture } : null);
       const task = computed(() => { st.rev; return asset.value && E.S.tasks.find(t => t.node === 'mesh_optimize' && t.asset_id === asset.value.id && ['queued', 'running'].includes(t.status)); });
-      const steps = ['减面', '重拓扑', 'UV 展开', '贴图烘焙', '压缩导出'];
+      const steps = ['减面', '重拓扑', 'UV 展开', '贴图烘焙', st.production?'保存 GLB / .blend':'压缩导出'];
       const stepState = (i) => { const t = task.value; if (t) { if (t.status === 'queued') return 'queued'; const s = Math.floor(t.progress * 5); return i < s ? 'done' : i === s ? 'run' : 'wait'; } return ver.value && ver.value.opt ? 'done' : 'wait'; };
       const rows = computed(() => { const v = ver.value; if (!v) return []; const r = v.raw, o = v.opt, p = P_.value; return [
         ['三角形', U.n(r.tris), o ? U.n(o.tris) : '—', '≤ ' + U.n(p.tris), o ? o.tris <= p.tris : null],
@@ -381,7 +381,7 @@
           </div></div>
           <div class="panel"><header><h3>处理步骤</h3><span class="sub" v-if="task">{{ task.code }} · {{ D.TASK_STATUS[task.status] }}</span></header><div class="body stack">
             <div v-for="(s,i) in steps" :key="s" class="row nowrap"><span class="mono faint">{{ i+1 }}</span><span style="flex:1">{{ s }}</span><c-pill :kind="{done:'ok',run:'run',queued:'info',wait:'plain'}[stepState(i)]" :text="{done:'完成',run:'执行中',queued:'排队',wait:'待执行'}[stepState(i)]"></c-pill></div>
-            <div class="faint small">工具：Blender 4.2 无头 · Instant Meshes · xatlas · gltf-transform</div>
+            <div class="faint small">{{st.production?'Blender CPU 加工；Draco/KTX2 压缩在导出发布中执行。':'工具：Blender 4.2 无头 · Instant Meshes · xatlas · gltf-transform'}}</div>
           </div></div>
           <div class="panel"><header><h3>操作</h3></header><div class="body stack">
             <label class="check"><c-switch v-model="manual"></c-switch>主视觉资产：转人工重拓扑（输出高模、自动低模和 .blend）</label>

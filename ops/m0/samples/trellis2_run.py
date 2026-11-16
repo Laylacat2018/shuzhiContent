@@ -45,6 +45,7 @@ def main() -> int:
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--steps", type=int, default=None, help="各阶段采样步数；不填用模型默认")
     ap.add_argument("--model", default="microsoft/TRELLIS.2-4B")
+    ap.add_argument("--no-retry", action="store_true", help="由平台调度器统一管理一次 OOM 重试")
     a = ap.parse_args()
 
     import torch
@@ -60,7 +61,7 @@ def main() -> int:
     image = Image.open(a.image)
 
     mesh, res = None, a.resolution
-    for attempt in range(2):
+    for attempt in range(1 if a.no_retry else 2):
         t0 = time.time()
         try:
             mesh, peak = generate(pipeline, image, res, a.seed, a.steps)
@@ -69,7 +70,7 @@ def main() -> int:
         except torch.cuda.OutOfMemoryError as e:
             meta["attempts"].append({"resolution": res, "ok": False, "error": "CUDA OOM", "seconds": round(time.time() - t0, 1)})
             torch.cuda.empty_cache()
-            if attempt == 0 and res > 512:
+            if not a.no_retry and attempt == 0 and res > 512:
                 res = 512  # SPEC：OOM 降一档重试 1 次
                 continue
             meta["status"] = "manual"

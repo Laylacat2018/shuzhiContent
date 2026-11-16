@@ -24,7 +24,7 @@ function bump(id) { HOST.rev[id] = (HOST.rev[id] || 0) + 1; }
 
 function hostCreate(id) {
   HOST.cur = id;
-  Engine.init({ fresh: true });
+  if (HOST.production) Engine.productionInit(); else Engine.init({ fresh: true });
   HOST.ws[id] = Engine.S; bump(id);
   return id;
 }
@@ -32,6 +32,7 @@ function hostCreate(id) {
 /* 断电 / 重启恢复：运行中任务回到排队，GPU 视为空载，正在开机的云节点重新开机 */
 function hostLoad(id, json) {
   var S = JSON.parse(json); var n = 0;
+  if (!!HOST.production !== !!(S.runtime && S.runtime.mode === 'production')) throw new Error('运行模式与数据不一致，请使用独立 SCW_DATA 目录');
   S.tasks.forEach(function (t) { if (t.status === 'running') { t.status = 'queued'; t.elapsed = 0; t.progress = 0; t._oomChecked = false; (t.log = t.log || []).push('[恢复] 服务重启，运行中任务已回到排队'); n++; } });
   S.gpu.loaded = null; S.gpu.swapping = null; S.gpu.viewportOpen = false;
   S.cloudNodes.forEach(function (c) { if (c.state !== 'off') { c.state = 'booting'; c.boot = 60; c.task = null; } });
@@ -71,6 +72,7 @@ function hostEval(id, uid, pid, src) {
 
 function hostTick(ms) {
   Object.keys(HOST.ws).forEach(function (id) { HOST.cur = id; Engine.S = HOST.ws[id]; Engine.tick(ms); bump(id); });
+  return true;
 }
 function hostState(id) { return JSON.stringify(HOST.ws[id]); }
 function hostRev(id) { return HOST.rev[id] || 0; }

@@ -13,10 +13,11 @@ import json
 import logging
 import os
 import pathlib
+import io
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
+from fastapi import Cookie, Depends, FastAPI, File, Header, HTTPException, Query, Request, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -45,18 +46,26 @@ RPC_ALLOWED = {
 }
 
 host: EngineHost | None = None
+runtime = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global host
+    global host, runtime
     host = EngineHost(DIST, DATA)
     host.ensure(DEFAULT_WS)
     host.start()
+    if host.production:
+        from .production import Config, Runtime
+        runtime = Runtime(host, Config.env(DATA))
+        runtime.start()
     log.info("引擎已启动，工作区：%s", host.workspaces())
     try:
         yield
     finally:
+        if runtime:
+            runtime.stop()
+            runtime = None
         host.stop()
 
 
@@ -71,14 +80,24 @@ async def biz_error(_: Request, e: BizError):
 
 
 # ---------------------------------------------------------------- 身份
+@app.exception_handler(FileNotFoundError)
+async def file_missing(_: Request, e: FileNotFoundError):
+    return JSONResponse({"detail": "文件不存在或不属于当前工作区"}, status_code=404)
+
+
+@app.exception_handler(ValueError)
+async def bad_value(_: Request, e: ValueError):
+    return JSONResponse({"detail": str(e)}, status_code=400)
+
+
 class Ctx(BaseModel):
     uid: str
     ws: str
     pid: str | None = None
 
 
-def ctx(authorization: str = Header(default=""), x_scw_project: str | None = Header(default=None)) -> Ctx:
-    token = authorization.removeprefix("Bearer ").strip()
+def ctx(authorization: str = Header(default=""), x_scw_project: str | None = Header(default=None), scw_session: str = Cookie(default="")) -> Ctx:
+    token = authorization.removeprefix("Bearer ").strip() or scw_session
     claims = auth.verify(token) if token else None
     if not claims:
         raise HTTPException(401, "未登录或登录已过期")
@@ -91,7 +110,51 @@ def H() -> EngineHost:
 
 
 def call(c: Ctx, fn: str, *args: Any) -> Any:
+    if H().production:
+        production_guard(c, fn, args)
     return H().call(c.ws, c.uid, c.pid, fn, list(args))
+
+
+def production_guard(c: Ctx, fn: str, args: tuple) -> None:
+    """The public API cannot inject tasks, fake provenance/QA, or edit server-owned fields."""
+    blocked = {"enqueue", "audit", "patch", "reset", "setSpeed", "setRelease", "setViewport", "stopCloudNode"}
+    if fn in blocked:
+        raise BizError("真实生产模式不允许此操作", "forbidden")
+    node={'submitJob':'concept_image','generateConcepts':'concept_image','selectConcepts':'image_to_3d','regenerate3d':'image_to_3d','optimize':'mesh','autoFix':'mesh','runQA':'mesh','manualResolve':'mesh','createExport':'export'}.get(fn)
+    if fn=='taskAction' and len(args)>1 and args[1] in {'retry','resume'}:
+        task=q(c,f"E.task({json.dumps(args[0])})")
+        node=task['node'] if task else None
+    if node:
+        try:runtime.require_ready(node,fn=='submitJob' or (fn=='generateConcepts' and args[0].get('remove_bg',True)))
+        except ValueError as e:raise HTTPException(409,str(e)) from None
+    if fn in {"updateJob", "createJob"}:
+        body = args[1] if fn == "updateJob" else args[0]
+        allowed = {"title", "description", "content_type", "platforms", "quantity", "is_heritage", "style_lora", "ref_images", "project_id", "usage_scope", "ai_restore"}
+        if set(body) - allowed: raise BizError("需求单包含不可修改的字段", "bad_request")
+        for ref in body.get("ref_images", []):
+            if not isinstance(ref, dict) or not ref.get("file_id"): raise BizError("参考图须先上传", "bad_request")
+            runtime.files.verify(c.ws, ref["file_id"])
+    if fn in {"uploadLicense", "manualResolve"}:
+        f = args[1] if fn == "uploadLicense" else args[2] if len(args)>2 else None
+        if not isinstance(f, dict) or not f.get("file_id"): raise BizError("必须先上传真实文件", "bad_request")
+        runtime.files.verify(c.ws, f["file_id"])
+        row=runtime.files.get(c.ws,f['file_id'])
+        if fn=='uploadLicense' and row['media_type']!='application/pdf':raise BizError('授权附件须为 PDF','bad_request')
+        if fn=='manualResolve' and row['media_type']!='model/gltf-binary':raise BizError('人工交接须上传 GLB','bad_request')
+        f.update(name=row['name'],sha256=row['sha256'])
+    if fn == "updateModel":
+        if set(args[1]) - {"allowed_scope", "license_type", "license_status", "region_restricted", "name", "version", "vram_gb"}:
+            raise BizError("生产模式不允许修改执行器或文件参数", "bad_request")
+        if args[1].get("license_status") == "已登记授权":
+            raise BizError("请通过真实授权附件的确认操作登记授权", "bad_request")
+    if fn=='registerModel':
+        body=args[0]
+        if body.get('node')=='lora':
+            root=pathlib.Path(os.getenv('SCW_MODEL_DIR','/data/models/comfyui'))/'loras'
+            path=(root/body.get('file_name','')).resolve()
+            if not path.is_relative_to(root.resolve()) or path.suffix!='.safetensors' or not path.is_file():
+                raise BizError('请先部署真实 LoRA 权重，再填写模型目录内的文件名','bad_request')
+        else:body['status']='未接入'
 
 
 def q(c: Ctx, expr: str) -> Any:
@@ -107,8 +170,8 @@ def healthz() -> dict:
 @app.get("/api/v1/info")
 def info() -> dict:
     return {"name": "空间内容工场 Spatial Content Works", "version": VERSION, "mode": "server", "engine": "server-v8", "pages": 14,
-            "workspace": DEFAULT_WS, "users": [{"id": k, **v} for k, v in auth.USERS.items()],
-            "note": "模型推理由确定性模拟代替；业务规则、状态与权限由服务端统一执行。"}
+            "workspace": DEFAULT_WS, "execution_mode": "production" if H().production else "demo", "users": [{"id": k, **v} for k, v in auth.USERS.items()],
+            "note": "真实生产模式：模型与加工由 Worker 执行。" if H().production else "模型推理由确定性模拟代替；业务规则、状态与权限由服务端统一执行。"}
 
 
 class LoginIn(BaseModel):
@@ -123,7 +186,17 @@ def login(body: LoginIn) -> dict:
         raise HTTPException(401, "账号或密码错误")
     ws = H().ensure((body.workspace or DEFAULT_WS).strip().lower())
     H().call(ws, body.user_id, None, "audit", ["登录", auth.USERS[body.user_id]["name"], auth.USERS[body.user_id]["role"]])
-    return {"token": auth.issue(body.user_id, ws), "user": {"id": body.user_id, **auth.USERS[body.user_id]}, "workspace": ws}
+    token = auth.issue(body.user_id, ws)
+    response = JSONResponse({"token": token, "user": {"id": body.user_id, **auth.USERS[body.user_id]}, "workspace": ws})
+    response.set_cookie("scw_session", token, httponly=True, samesite="strict", secure=os.getenv("SCW_COOKIE_SECURE") == "1", max_age=auth.TTL)
+    return response
+
+
+@app.post('/api/v1/auth/logout')
+def logout():
+    response=JSONResponse({'ok':True})
+    response.delete_cookie('scw_session')
+    return response
 
 
 @app.get("/api/v1/state")
@@ -134,6 +207,55 @@ def state(c: Ctx = Depends(ctx), since: int | None = Query(default=None)) -> Res
     return Response(H().state(c.ws), media_type="application/json", headers={"X-SCW-Rev": str(rev)})
 
 
+@app.post("/api/v1/files")
+async def upload_file(file: UploadFile = File(...), c: Ctx = Depends(ctx)) -> dict:
+    if not runtime: raise HTTPException(409, "文件服务仅在真实生产模式开放")
+    if auth.USERS[c.uid]["role"] not in {"pm", "artist", "admin"}: raise HTTPException(403, "当前角色不能上传")
+    limit = int(os.getenv("SCW_UPLOAD_LIMIT_MB", "64")) * 2**20
+    data = await file.read(limit+1)
+    if len(data)>limit: raise HTTPException(413, "文件超过上传限制")
+    name = pathlib.Path((file.filename or "").replace("\\", "/")).name
+    suffix = pathlib.Path(name).suffix.lower()
+    media = "application/octet-stream"
+    try:
+        if suffix in {".png", ".jpg", ".jpeg", ".webp"}:
+            from PIL import Image
+            with Image.open(io.BytesIO(data)) as im:
+                if im.width * im.height > 40_000_000: raise ValueError("图片像素过大")
+                im.verify()
+            media = {".png":"image/png", ".jpg":"image/jpeg", ".jpeg":"image/jpeg", ".webp":"image/webp"}[suffix]
+        elif suffix == ".glb":
+            import struct
+            if len(data)<20 or data[:4] != b"glTF" or struct.unpack_from("<I",data,8)[0] != len(data): raise ValueError("GLB 结构无效")
+            length = struct.unpack_from("<I", data, 12)[0]
+            doc = json.loads(data[20:20+length])
+            if any(x.get('uri') for x in doc.get('buffers', []) + doc.get('images', [])): raise ValueError('请上传自包含的 GLB，不能引用外部文件')
+            media = "model/gltf-binary"
+        elif suffix == ".pdf" and data.startswith(b"%PDF-"):
+            if auth.USERS[c.uid]["role"] != "admin": raise HTTPException(403, "只有管理员可上传授权文件")
+            media = "application/pdf"
+        else: raise ValueError("仅支持 PNG/JPEG/WebP、GLB 和授权 PDF")
+    except (ValueError, OSError) as e: raise HTTPException(400, str(e)) from e
+    saved = runtime.files.put(c.ws, name, data, media)
+    H().call(c.ws, c.uid, c.pid, "audit", ["上传文件", name, saved["sha256"]])
+    return saved
+
+
+@app.get("/api/v1/files/{fid}")
+def get_file(fid: str, c: Ctx = Depends(ctx)):
+    if not runtime: raise HTTPException(409, "文件服务未启用")
+    try:
+        row = runtime.files.get(c.ws, fid); path = runtime.files.path(c.ws, fid)
+    except FileNotFoundError: raise HTTPException(404, "文件不存在") from None
+    return FileResponse(path, media_type=row["media_type"], filename=row["name"], content_disposition_type="inline", headers={"X-Content-Type-Options":"nosniff", "Cache-Control":"private, max-age=300"})
+
+
+@app.get("/api/v1/system/engines")
+def engines(c: Ctx = Depends(ctx)):
+    if not runtime: return {"mode":"demo"}
+    return dict(runtime.readiness(),metrics=runtime.metrics())
+
+
 class RpcIn(BaseModel):
     fn: str
     args: list = Field(default_factory=list)
@@ -142,6 +264,8 @@ class RpcIn(BaseModel):
 @app.post("/api/v1/rpc")
 def rpc(body: RpcIn, c: Ctx = Depends(ctx)) -> Response:
     """前端页面的写操作入口：执行后返回结果与最新状态（一次往返保持界面同步）。"""
+    if H().production:
+        production_guard(c, body.fn, tuple(body.args))
     if body.fn == "reset":
         if auth.USERS[c.uid]["role"] != "admin":
             raise BizError("当前角色无权执行：重置演示数据", "forbidden")
@@ -372,12 +496,13 @@ def update_model(mid: str, body: dict, c: Ctx = Depends(ctx)) -> dict:
 
 
 class LicenseIn(BaseModel):
-    file_name: str
+    file_name: str = ''
+    file_id: str | None = None
 
 
 @app.post("/api/v1/models/{mid}/license")
 def upload_license(mid: str, body: LicenseIn, c: Ctx = Depends(ctx)) -> dict:
-    return call(c, "uploadLicense", mid, body.file_name)
+    return call(c, "uploadLicense", mid, {'file_id':body.file_id} if H().production else body.file_name)
 
 
 @app.get("/api/v1/system/gpu")

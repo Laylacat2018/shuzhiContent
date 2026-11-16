@@ -1,3 +1,5 @@
 fastapi>=0.110
 uvicorn[standard]>=0.29
 mini-racer>=0.12
+python-multipart>=0.0.20
+Pillow>=11

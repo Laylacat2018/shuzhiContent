@@ -8,6 +8,8 @@
   // ---------- GLB / 交付包 ----------
   async function assetGLB(a, opts) {
     const v = E.cur(a); const s = v.opt || v.raw;
+    if (v.file_url) { const r = await fetch(v.file_url); if (!r.ok) throw new Error('真实文件读取失败'); return new Uint8Array(await r.arrayBuffer()); }
+    if (st.production) throw new Error('该版本缺少真实文件');
     const mesh = Geo.buildMesh({ category: v.category, seed: v.seed, defects: v.defects || {} }, s.target || s.tris);
     let avgM = 0, avgR = 0; for (let i = 0; i < mesh.verts; i++) { avgM += mesh.mr[i * 2]; avgR += mesh.mr[i * 2 + 1]; } avgM /= mesh.verts; avgR /= mesh.verts;
     const mark = a.source === '生成' && v.aigc_mark ? { AIGC: { label: (a.ai_restore ? 'AI 复原 · ' : '') + 'AI 生成', model: v.aigc_mark.model, time: v.aigc_mark.time, platform: '空间内容工场' } } : {};
@@ -45,6 +47,8 @@ new THREE.GLTFLoader().load('scene.glb',g=>s.add(g.scene));r.setAnimationLoop(()
     return `# 空间内容工场 · 原始工程导入脚本\n# 用法：blender -b -P blender_import.py -- 输出.blend\nimport bpy, sys, os\nhere = os.path.dirname(os.path.abspath(__file__))\nbpy.ops.wm.read_factory_settings(use_empty=True)\nfor f in ${JSON.stringify(files)}:\n    bpy.ops.import_scene.gltf(filepath=os.path.join(here, f))\nout = sys.argv[sys.argv.index('--') + 1] if '--' in sys.argv else os.path.join(here, 'project.blend')\nbpy.ops.wm.save_as_mainfile(filepath=out)\nprint('saved', out)\n`;
   }
   async function buildPackage(ex) {
+    if (ex.download_url) { const r = await fetch(ex.download_url); if (!r.ok) throw new Error('交付包读取失败'); return r.blob(); }
+    if (E.S.runtime?.mode === 'production') throw new Error('真实导出任务尚未完成');
     const zip = new JSZip(); const list = [];
     const assets = ex.asset_ids.map(i => E.asset(i));
     for (const a of assets) { if (a.type === 'prop') { const b = await assetGLB(a); const n = `assets/${a.code}_v${E.cur(a).version}.glb`; zip.file(n, b); list.push(n); } else { const sp = Geo.buildSplats(Geo.hash(a.code), 5000, false, true); let ply = `ply\nformat ascii 1.0\nelement vertex ${sp.count}\nproperty float x\nproperty float y\nproperty float z\nproperty uchar red\nproperty uchar green\nproperty uchar blue\nend_header\n`; for (let i = 0; i < sp.count; i++) ply += `${sp.positions[i * 3].toFixed(3)} ${sp.positions[i * 3 + 1].toFixed(3)} ${sp.positions[i * 3 + 2].toFixed(3)} ${sp.colors[i * 3] * 255 | 0} ${sp.colors[i * 3 + 1] * 255 | 0} ${sp.colors[i * 3 + 2] * 255 | 0}\n`; zip.file(`splats/${a.code}.ply`, ply); } }
@@ -73,7 +77,7 @@ new THREE.GLTFLoader().load('scene.glb',g=>s.add(g.scene));r.setAnimationLoop(()
       const ver = computed(() => asset.value && E.cur(asset.value));
       const qa = computed(() => { st.rev; return ver.value && E.qaOf(ver.value); });
       const mode = ref('solid');
-      const info = computed(() => { const v = ver.value; if (!v || asset.value.type !== 'prop') return null; const s = v.opt || v.raw; return { category: v.category, seed: v.seed, tris: s.target || s.tris, texture: s.texture, defects: v.defects }; });
+      const info = computed(() => { const v = ver.value; if (!v || asset.value.type !== 'prop') return null; const s = v.opt || v.raw; return { file_url: v.file_url, category: v.category, seed: v.seed, tris: s.target || s.tris, texture: s.texture, defects: v.defects }; });
       const reason = ref(''); const comment = ref('');
       const idx = computed(() => list.value.findIndex(a => a.id === selId.value));
       const step = (d) => { const l = list.value; if (!l.length) return; const i = (idx.value + d + l.length) % l.length; selId.value = l[i].id; reason.value = ''; comment.value = ''; };
@@ -84,17 +88,21 @@ new THREE.GLTFLoader().load('scene.glb',g=>s.add(g.scene));r.setAnimationLoop(()
         let c = comment.value;
         if (dec === 'pass' && failed.value.length && !c.trim()) { const r = await confirmBox({ title: '放行理由', text: `存在 ${failed.value.length} 项自动检查未通过：${failed.value.map(f => f.rule + ' ' + f.name).join('、')}。通过需要填写放行理由。`, input: '', inputLabel: '放行理由', ok: '通过并入库' }); if (!r) return; c = r; }
         const cur = asset.value.id;
-        const ok = act(() => E.review(cur, dec, reason.value, c), { pass: '已通过并写入资产库（生成新版本）', rework: '已返工，系统按原因重新排队', discard: '已废弃（保留 30 天）' }[dec]);
+        const ok = act(() => E.review(cur, dec, reason.value, c), { pass: '已通过并写入资产库', rework: '已返工，系统按原因重新排队', discard: '已废弃' }[dec]);
         if (ok) { reason.value = ''; comment.value = ''; }
       };
-      const autofix = () => act(() => E.autoFix(asset.value.id), (r) => r.fixed.length ? `已修复：${r.fixed.join('、')}，已重检` : '没有可自动修复的项');
+      const autofix = () => act(() => E.autoFix(asset.value.id), (r) => r.fixed ? (r.fixed.length ? `已修复：${r.fixed.join('、')}，已重检` : '没有可自动修复的项') : '已提交真实文件修复与重检');
       const onKey = (e) => { if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName) || st.modal) return; const k = e.key.toLowerCase(); if (k === 'a') decide('pass'); else if (k === 'r') { if (!reason.value) { toast('请先选择返工原因', 'warn'); document.getElementById('rw-reason') && document.getElementById('rw-reason').focus(); } else decide('rework'); } else if (k === 'd') decide('discard'); else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { step(1); e.preventDefault(); } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { step(-1); e.preventDefault(); } };
       onMounted(() => window.addEventListener('keydown', onKey)); onUnmounted(() => window.removeEventListener('keydown', onKey));
       const job = computed(() => asset.value && asset.value.job_id && E.S.jobs.find(j => j.id === asset.value.job_id));
       const canReview = computed(() => { st.rev; return E.can('review'); });
       const canManual = computed(() => { st.rev; return E.can('manual.handle'); });
+      const finishManual = async () => {
+        if (E.S.runtime?.mode !== 'production') return act(() => E.manualResolve(asset.value.id, '人工修复后重新提交'), '已重新提交质检');
+        try { const f = await global.SCW.chooseUpload('.glb'); if (f) act(() => E.manualResolve(asset.value.id, '上传人工修复 GLB', f), '已提交真实文件质检'); } catch (e) { toast(e.message, 'err'); }
+      };
       const vref = shallowRef(null);
-      return { tab, list, selId, asset, ver, qa, mode, info, reason, comment, idx, step, failed, decide, autofix, job, canReview, canManual, vref, E, D, U, st, act };
+      return { tab, list, selId, asset, ver, qa, mode, info, reason, comment, idx, step, failed, decide, autofix, finishManual, job, canReview, canManual, vref, E, D, U, st, act };
     },
     template: `<div class="page" :data-r="st.rev">
       <c-head code="P10" ver="V1.0" title="质检审核" goal="查看自动检查结果，对资产做通过、返工或废弃的决定。快捷键 A 通过 / R 返工 / D 废弃，方向键切换。"></c-head>
@@ -105,7 +113,7 @@ new THREE.GLTFLoader().load('scene.glb',g=>s.add(g.scene));r.setAnimationLoop(()
           <div v-if="!list.length" class="body muted">没有待审核资产</div></div></div>
         <div class="stack" style="min-width:0" v-if="asset">
           <c-asset-view v-if="asset.type==='prop'" :info="info" :mode="mode" :height="430" @ready="v=>vref=v">
-            <template #default="{meta}"><div class="vp-tools"><div class="seg"><button v-for="m in [['solid','实体'],['wire','线框'],['uv','UV'],['issues','问题高亮']]" :key="m[0]" :class="{on:mode===m[0]}" @click="mode=m[0]">{{ m[1] }}</button></div><span class="spacer"></span><button class="btn sm" @click="step(-1)">上一件</button><button class="btn sm" @click="step(1)">下一件</button></div>
+            <template #default="{meta}"><div class="vp-tools"><div class="seg"><button v-for="m in [['solid','实体'],['wire','线框'],['uv','UV'],['issues','问题高亮']].filter(m=>!st.production || m[0]!=='issues')" :key="m[0]" :class="{on:mode===m[0]}" @click="mode=m[0]">{{ m[1] }}</button></div><span class="spacer"></span><button class="btn sm" @click="step(-1)">上一件</button><button class="btn sm" @click="step(1)">下一件</button></div>
             <div class="vp-overlay"><span>{{ asset.code }} · v{{ ver.version }}</span><span>{{ U.n(meta ? meta.tris : 0) }} 三角形</span><span v-if="mode==='issues'" style="color:var(--err)">红色：法线翻转　橙色：非流形边</span></div></template></c-asset-view>
           <div v-else class="viewport" style="height:300px"><img :src="U.thumbOf(asset)" style="width:100%;height:100%;object-fit:cover" alt=""><div class="vp-overlay"><span>{{ asset.type==='recon' ? '实景重建 3DGS' : '世界生成 3DGS' }} · {{ U.n(ver.splats) }} splat</span></div></div>
           <div class="panel"><header><h3>自动检查</h3><span class="sub" v-if="qa">{{ E.S.settings.presets[qa.preset_id].name }} · 用时 {{ qa.duration_s }} 秒</span><span class="right"><button class="btn sm" :disabled="!canReview || asset.status!=='review'" @click="autofix" id="btn-autofix">自动修复非流形并重检</button></span></header>
@@ -119,7 +127,7 @@ new THREE.GLTFLoader().load('scene.glb',g=>s.add(g.scene));r.setAnimationLoop(()
             <div class="kv small"><div>AIGC 标识</div><div><span v-if="ver.aigc_mark" class="tag ai">{{ asset.ai_restore ? 'AI 复原 · ' : '' }}AI 生成 · {{ ver.aigc_mark.model }}</span><span v-else class="muted">{{ asset.source }}类，不写入</span></div><div>需求单</div><div>{{ job ? job.code + ' ' + job.title : '—' }}</div><div>文物本体</div><div>{{ asset.heritage ? '是' : '否' }}</div><div>来源</div><div>{{ asset.source }}</div><div>seed</div><div class="mono">{{ ver.seed ?? '—' }}</div></div>
           </div></div>
           <div class="panel"><header><h3>人工审核</h3><span class="sub">返工 {{ asset.rework_count }} 次（超过 2 次自动转人工）</span></header><div class="body stack">
-            <template v-if="asset.status==='manual'"><div class="note warn">{{ asset.manual_note || '重试仍失败，已转人工' }}</div><button class="btn primary" :disabled="!canManual" @click="act(()=>E.manualResolve(asset.id,'人工在 Blender 中修复后重新提交'),'已重新提交质检')">人工处理完成，重新提交</button></template>
+            <template v-if="asset.status==='manual'"><div class="note warn">{{ asset.manual_note || '重试仍失败，已转人工' }}</div><div class="row" v-if="ver.blend_file_id"><a class="btn" :href="'/api/v1/files/'+ver.blend_file_id" download>下载 .blend</a><a class="btn" :href="'/api/v1/files/'+ver.raw_file_id" download>下载高模</a><a class="btn" :href="ver.file_url" download>下载低模</a></div><button class="btn primary" :disabled="!canManual" @click="finishManual">人工处理完成，上传并提交</button></template>
             <template v-else-if="asset.status==='review'">
               <div class="field"><label for="rw-reason">返工原因（返工必选）</label><select id="rw-reason" class="inp" v-model="reason"><option value="">请选择</option><option v-for="(n,k) in D.REWORK_REASONS" :key="k" :value="k">{{ n }}（回到{{ ['geometry','style'].includes(k) ? '3D 生成' : '资产优化' }}）</option></select></div>
               <div class="field"><label for="rw-comment">备注{{ failed.length ? ' / 放行理由（有未通过项时通过必填）' : '' }}</label><textarea id="rw-comment" class="inp" v-model="comment" rows="2"></textarea></div>
@@ -146,7 +154,7 @@ new THREE.GLTFLoader().load('scene.glb',g=>s.add(g.scene));r.setAnimationLoop(()
       const scenes = computed(() => { st.rev; return E.S.scenes.filter(s => s.project_id === E.S.currentProjectId); });
       const addToScene = async (ids) => { const sc = scenes.value[0]; if (!sc) return toast('请先在场景组装中创建场景', 'err'); const props = ids.filter(id => E.asset(id).type === 'prop'); act(() => props.forEach((id, i) => E.addSceneItem(sc.id, id, [i * 0.9 - props.length * 0.45, 0, 1.6])), `已加入场景 ${sc.code}`); };
       const exportSel = () => go('export', { assets: [...sel] });
-      const download = async (a) => { const b = await assetGLB(a); const chk = glbCheck(b); E.audit('下载资产', a.code, 'GLB'); saveFile(`${a.code}_v${E.cur(a).version}.glb`, b, 'model/gltf-binary'); if (!chk.ok) toast('GLB 结构校验发现问题：' + chk.issues.join('；'), 'err'); };
+      const download = async (a) => { try { const b = await assetGLB(a); if(st.production){await saveFile(`${a.code}_v${E.cur(a).version}.glb`,b,'model/gltf-binary');return;} const chk = glbCheck(b); E.audit('下载资产', a.code, 'GLB'); saveFile(`${a.code}_v${E.cur(a).version}.glb`, b, 'model/gltf-binary'); if (!chk.ok) toast('GLB 结构校验发现问题：' + chk.issues.join('；'), 'err'); } catch(e){toast(e.message,'err');} };
       const del = async (a) => { const ok = await confirmBox({ title: '删除资产', text: `确认删除 ${a.code}？删除后保留 30 天。`, ok: '删除', danger: true }); if (ok) act(() => E.deleteAsset(a.id), '已删除'); };
       const versions = computed(() => cur.value ? cur.value.versions.map(id => E.version(id)).filter(Boolean).reverse() : []);
       return { f, t0, list, sel, detail, cur, tag, scenes, addToScene, exportSel, download, del, versions, E, D, U, st, act };
@@ -204,7 +212,7 @@ new THREE.GLTFLoader().load('scene.glb',g=>s.add(g.scene));r.setAnimationLoop(()
       const run = () => act(() => E.createExport(opts.value), (ex) => `已创建导出 ${ex.code}${deviceTested.value ? '' : '（标记未经真机验证）'}`);
       const view = ref(null);
       const dl = async (ex) => { toast('正在打包交付包…'); const blob = await buildPackage(ex); saveFile(ex.code + '.zip', blob, 'application/zip'); };
-      const validate = async (ex) => { const assets = ex.asset_ids.map(i => E.asset(i)).filter(a => a.type === 'prop'); const out = []; for (const a of assets) { const b = await assetGLB(a); const c = glbCheck(b); out.push(`${a.code}: ${c.ok ? '通过' : c.issues.join('；')}（${c.tris} 三角形，与资产记录 ${U.stats(E.cur(a)).tris} ${c.tris === U.stats(E.cur(a)).tris ? '一致' : '不一致'}）`); } confirmBox({ title: 'GLB 结构校验 · ' + ex.code, text: out.join('\n') || '没有 GLB 资产', ok: '关闭', cancel: '返回' }); };
+      const validate = async (ex) => { if(st.production){return confirmBox({title:'真实压缩校验 · '+ex.code,text:ex.status==='done'?ex.manifest.assets.map(a=>a.file+'\nSHA-256: '+a.sha256+'\n'+JSON.stringify(a.validation)).join('\n\n'):'真实导出尚未完成',ok:'关闭',cancel:'返回'});} const assets = ex.asset_ids.map(i => E.asset(i)).filter(a => a.type === 'prop'); const out = []; for (const a of assets) { const b = await assetGLB(a); const c = glbCheck(b); out.push(`${a.code}: ${c.ok ? '通过' : c.issues.join('；')}（${c.tris} 三角形，与资产记录 ${U.stats(E.cur(a)).tris} ${c.tris === U.stats(E.cur(a)).tris ? '一致' : '不一致'}）`); } confirmBox({ title: 'GLB 结构校验 · ' + ex.code, text: out.join('\n') || '没有 GLB 资产', ok: '关闭', cancel: '返回' }); };
       return { kind, sceneId, lib, pick, targets, settings, deviceTested, chk, scenes, records, togT, run, view, dl, validate, E, D, U, st };
     },
     template: `<div class="page" :data-r="st.rev">
@@ -221,7 +229,7 @@ new THREE.GLTFLoader().load('scene.glb',g=>s.add(g.scene));r.setAnimationLoop(()
             <label v-for="(t,k) in D.EXPORT_TARGETS" :key="k" class="check panel" style="padding:10px" :class="{disabled: D.VERSION_ORDER[t.ver] > D.VERSION_ORDER[E.S.release]}"><input type="checkbox" :checked="targets.has(k)" @change="togT(k)" :disabled="D.VERSION_ORDER[t.ver] > D.VERSION_ORDER[E.S.release]" :id="'tg-'+k"><span><b>{{ t.name }}</b> <span class="tag ver">{{ t.ver }}</span><br><span class="small muted">{{ t.fmt }}</span></span></label>
           </div></div>
           <div class="panel"><header><h3>导出记录</h3></header><div class="tbl-wrap"><table class="tbl"><thead><tr><th>编号</th><th>时间</th><th>对象</th><th>目标</th><th class="r">大小</th><th>操作人</th><th>状态</th><th></th></tr></thead><tbody>
-            <tr v-for="x in records" :key="x.id"><td class="mono">{{ x.code }}</td><td class="small">{{ U.dt(x.created_at) }}</td><td>{{ x.object_type==='scene' ? (E.S.scenes.find(s=>s.id===x.object_id)||{}).code : x.asset_ids.length+' 件资产' }}</td><td class="small">{{ x.targets.map(t=>D.EXPORT_TARGETS[t].name).join('、') }}</td><td class="r">{{ x.size_mb!=null ? x.size_mb+' MB' : '—' }}</td><td>{{ x.created_by }}</td><td><c-pill :kind="x.status==='done'?'ok':'run'" :text="x.status==='done' ? (x.deviceTested?'已完成':'已完成 · 未经真机验证') : '打包中'"></c-pill></td><td class="row nowrap"><button class="btn sm" @click="view=x">交付清单</button><button class="btn sm" :disabled="x.status!=='done'" @click="validate(x)">校验</button><button class="btn sm" :disabled="x.status!=='done'" @click="dl(x)">下载</button></td></tr>
+            <tr v-for="x in records" :key="x.id"><td class="mono">{{ x.code }}</td><td class="small">{{ U.dt(x.created_at) }}</td><td>{{ x.object_type==='scene' ? (E.S.scenes.find(s=>s.id===x.object_id)||{}).code : x.asset_ids.length+' 件资产' }}</td><td class="small">{{ x.targets.map(t=>D.EXPORT_TARGETS[t].name).join('、') }}</td><td class="r">{{ x.size_mb!=null ? x.size_mb+' MB' : '—' }}</td><td>{{ x.created_by }}</td><td><c-pill :kind="U.taskPill(x.status)" :text="x.status==='done' ? (x.deviceTested?'已完成':'已完成 · 未经真机验证') : (D.TASK_STATUS[x.status] || '打包中')"></c-pill><div v-if="x.error" class="small res-fail">{{x.error}}</div></td><td class="row nowrap"><button class="btn sm" @click="view=x">交付清单</button><button class="btn sm" :disabled="x.status!=='done'" @click="validate(x)">校验</button><button class="btn sm" :disabled="x.status!=='done'" @click="dl(x)">下载</button></td></tr>
             <tr v-if="!records.length"><td colspan="8" class="muted" style="text-align:center;padding:16px">暂无导出记录</td></tr></tbody></table></div></div>
         </div>
         <div class="stack">
@@ -263,7 +271,7 @@ new THREE.GLTFLoader().load('scene.glb',g=>s.add(g.scene));r.setAnimationLoop(()
       return { f, tasks, mins, lanes, models, log, doAct, g, nextOrder, stopNode, disk, E, D, U, st };
     },
     template: `<div class="page" :data-r="st.rev">
-      <c-head code="P13" ver="V1.0" title="任务队列" goal="查看 GPU 排程和全部任务，处理排队、失败和云端任务。GPU 队列并发 1，同模型合批（≤ 20 件 / 30 分钟），置顶任务在当前批次结束后执行。"><div class="seg"><button v-for="m in [10,30,60]" :key="m" :class="{on:mins===m}" @click="mins=m">{{ m }} 分钟</button></div></c-head>
+      <c-head code="P13" ver="V1.0" title="任务队列" :goal="st.production?'查看真实执行排程、日志和任务状态。GPU 并发 1，CPU 并发 3；支持置顶和夜间队列。':'查看 GPU 排程和全部任务，处理排队、失败和云端任务。GPU 队列并发 1，同模型合批（≤ 20 件 / 30 分钟），置顶任务在当前批次结束后执行。'"><div class="seg"><button v-for="m in [10,30,60]" :key="m" :class="{on:mins===m}" @click="mins=m">{{ m }} 分钟</button></div></c-head>
       <div class="panel" style="margin-bottom:12px"><header><h3>GPU 排程</h3><span class="sub">色块为模型批次，灰色斜纹为换载</span><span class="right legend"><span v-for="m in models" :key="m"><i :style="{background:U.color(m)}"></i>{{ (E.model(m)||{}).name }}</span><span><i style="background:#a9b1ad"></i>换载</span></span></header>
         <div class="body gantt"><div class="lane" v-for="ln in lanes" :key="ln.l"><span>{{ ln.name }}</span><div class="track"><div v-for="(s,i) in ln.segs" :key="i" class="seg-block" :class="s.kind" :style="Object.assign({}, s.style, s.kind==='swap'?{}:{background:s.color})" :title="s.label">{{ s.label }}</div></div></div>
           <div class="gantt-axis"><span></span><div><span>-{{ mins }} 分钟</span><span>-{{ mins/2 }} 分钟</span><span>现在</span></div></div>
@@ -277,7 +285,8 @@ new THREE.GLTFLoader().load('scene.glb',g=>s.add(g.scene));r.setAnimationLoop(()
         <div class="stack">
           <div class="panel"><header><h3>本地 GPU</h3><span class="sub">RTX 4090 24GB</span></header><div class="body stack"><c-vram :history="E.S.gpu.history" :height="110" :minutes="10"></c-vram>
             <div class="grid g4 small"><div><div class="lbl">利用率</div><b class="num">{{ g.util||0 }}%</b></div><div><div class="lbl">温度</div><b class="num" :style="{color:g.temp>85?'var(--err)':''}">{{ g.temp||0 }}℃</b></div><div><div class="lbl">功耗</div><b class="num">{{ g.power||0 }}W</b></div><div><div class="lbl">显存</div><b class="num">{{ (g.vram||0).toFixed(1) }}G</b></div></div><div class="small">当前模型：<b>{{ g.model }}</b></div></div></div>
-          <div class="panel"><header><h3>云 GPU 节点</h3><span class="sub">空闲 {{ E.S.settings.cloud.idleShutdownMin }} 分钟自动关机</span></header><div class="list"><div class="li" v-for="n in E.S.cloudNodes.slice(0,6)" :key="n.id"><div class="grow"><div class="t1">{{ n.name }}</div><div class="t2">运行 {{ U.dur(n.runSec) }} · ¥{{ n.cost }} · {{ n.state==='off' ? '已关机' : n.state==='booting' ? '开机中' : n.task ? '执行中' : '空闲 '+U.dur(n.idleSec)+'，'+U.dur(E.S.settings.cloud.idleShutdownMin*60-n.idleSec)+' 后自动关机' }}</div></div><button class="btn sm" v-if="n.state!=='off'" @click="stopNode(n)">关机</button><button class="btn sm ghost" @click="log={code:n.name,log:['ssh root@'+n.type.toLowerCase().split(' ').join('-')+'.autodl.com','nvidia-smi: A800 80GB · '+(n.task?'busy':'idle'),'worker-cloud: heartbeat ok']}">SSH 日志</button></div><div v-if="!E.S.cloudNodes.length" class="body small muted">没有云节点。显存超过 23GB 的模型会自动路由到云端。</div></div></div>
+          <div v-if="st.production" class="panel"><header><h3>执行范围</h3></header><div class="body small muted">当前使用本机 Worker。云 GPU 和同模型常驻合批尚未接入。</div></div>
+          <div v-else class="panel"><header><h3>云 GPU 节点</h3><span class="sub">空闲 {{ E.S.settings.cloud.idleShutdownMin }} 分钟自动关机</span></header><div class="list"><div class="li" v-for="n in E.S.cloudNodes.slice(0,6)" :key="n.id"><div class="grow"><div class="t1">{{ n.name }}</div><div class="t2">运行 {{ U.dur(n.runSec) }} · ¥{{ n.cost }} · {{ n.state==='off' ? '已关机' : n.state==='booting' ? '开机中' : n.task ? '执行中' : '空闲 '+U.dur(n.idleSec)+'，'+U.dur(E.S.settings.cloud.idleShutdownMin*60-n.idleSec)+' 后自动关机' }}</div></div><button class="btn sm" v-if="n.state!=='off'" @click="stopNode(n)">关机</button><button class="btn sm ghost" @click="log={code:n.name,log:['ssh root@'+n.type.toLowerCase().split(' ').join('-')+'.autodl.com','nvidia-smi: A800 80GB · '+(n.task?'busy':'idle'),'worker-cloud: heartbeat ok']}">SSH 日志</button></div><div v-if="!E.S.cloudNodes.length" class="body small muted">没有云节点。显存超过 23GB 的模型会自动路由到云端。</div></div></div>
           <div class="panel"><header><h3>磁盘</h3></header><div class="body stack small"><div v-for="d in [['模型盘',disk.models],['资产与工程盘',disk.assets]]" :key="d[0]"><div class="row" style="justify-content:space-between"><span>{{ d[0] }} <span class="mono faint">{{ d[1].path }}</span></span><span class="num">{{ d[1].usedGb }} / {{ d[1].totalGb }} GB</span></div><c-progress :v="d[1].usedGb/d[1].totalGb" :kind="d[1].usedGb/d[1].totalGb>disk.alertPct/100?'bronze':''"></c-progress></div></div></div>
         </div>
       </div>
@@ -289,13 +298,23 @@ new THREE.GLTFLoader().load('scene.glb',g=>s.add(g.scene));r.setAnimationLoop(()
   P.system = {
     setup() {
       const tab = ref('models');
-      const tabs = [['models', '模型与许可证'], ['rules', '许可证规则'], ['cloud', '云 GPU'], ['llm', 'LLM 与 Agent'], ['presets', '质检预设'], ['storage', '存储'], ['users', '用户与权限'], ['audit', '审计日志'], ['demo', '演示控制']];
+      const production = E.S.runtime?.mode === 'production';
+      const tabs = [['models', '模型与许可证'], ['rules', '许可证规则'], ['cloud', '云 GPU'], ['llm', 'LLM 与 Agent'], ['presets', '质检预设'], ['storage', '存储'], ['users', '用户与权限'], ['audit', '审计日志'], ['demo', '演示控制']].filter(t => !production || !['cloud','llm','demo'].includes(t[0]));
+      const engineStatus = ref(null), engineError = ref(''), checking = ref(false);
+      const checkEngines = async () => {
+        checking.value=true; engineError.value='';
+        try { const r=await fetch('/api/v1/system/engines'); if(!r.ok)throw new Error('引擎检查失败'); engineStatus.value=await r.json(); }
+        catch(e) { engineError.value=e.message; } finally { checking.value=false; }
+      };
+      onMounted(() => { if(production)checkEngines(); });
+      const licenseDates=reactive({});
+      const confirmRealLicense=l=>act(()=>E.confirmLicense(l.id,licenseDates[l.id] || ''),'已确认授权');
       const setScope = (m, v) => act(() => E.updateModel(m.id, { allowed_scope: v }), '允许范围已更新，需求单与 3D 生成中的可选状态同步变化');
-      const nm = reactive({ name: '', purpose: '图生 3D', node: 'image_to_3d', license_type: 'MIT', vram_gb: 12, location: 'local', disk_gb: 10 });
+      const nm = reactive({ name: '', purpose: '图生 3D', node: 'image_to_3d', license_type: 'MIT', vram_gb: 12, location: 'local', disk_gb: 10, file_name: '' });
       const reg = () => act(() => E.registerModel(Object.assign({}, nm)), '已登记新模型（许可待核对，默认仅内部原型可用）');
       const up = reactive({ model: 'hunyuan3d-21', file: '' });
       const upload = () => { if (!up.file) return toast('请选择授权文件', 'err'); act(() => E.uploadLicense(up.model, up.file), '授权文件已上传，等待管理员确认'); up.file = ''; };
-      const onFile = (e) => { up.file = e.target.files[0] ? e.target.files[0].name : ''; };
+      const onFile = async (e) => { try { up.file = E.S.runtime?.mode === 'production' ? (await global.SCW.uploadFiles(e.target.files))[0] : e.target.files[0]?.name || ''; } catch (err) { toast(err.message, 'err'); } };
       const scopeMatrix = computed(() => { st.rev; return Object.entries(D.SCOPES).map(([k, n]) => ({ k, n, models: E.S.models.filter(m => !['lora', 'tool', 'rembg', 'llm'].includes(m.node)).map(m => ({ m, r: E.modelAllowed(m, { usage_scope: k }) })) })); });
       const setRule = (k, v) => act(() => E.updateSettings('rules.' + k, v), '规则已变更并写入审计日志，对变更后新提交的需求单生效');
       const setSet = (p, v) => act(() => E.updateSettings(p, v), '已保存');
@@ -304,12 +323,15 @@ new THREE.GLTFLoader().load('scene.glb',g=>s.add(g.scene));r.setAnimationLoop(()
       const reset = async () => { const ok = await confirmBox({ title: '重置演示数据', text: '将清空本浏览器中的全部演示数据并重新生成初始数据。', ok: '重置', danger: true }); if (ok) { E.reset(); st.rev++; toast('演示数据已重置'); } };
       const presetKeys = ['quest3', 'pico4', 'quest2', 'webxr', 'xr_space', 'custom'];
       const VERSION = window.SCW_VERSION || ''; const MODE = window.SCW_MODE || '';
-      return { VERSION, MODE, tab, tabs, setScope, nm, reg, up, upload, onFile, scopeMatrix, setRule, setSet, auditQ, audits, reset, presetKeys, E, D, U, st, act };
+      return { VERSION, MODE, production, engineStatus, engineError, checking, checkEngines, licenseDates, confirmRealLicense, tab, tabs, setScope, nm, reg, up, upload, onFile, scopeMatrix, setRule, setSet, auditQ, audits, reset, presetKeys, E, D, U, st, act };
     },
     template: `<div class="page" :data-r="st.rev">
       <c-head code="P14" ver="V1.0" title="系统设置" goal="管理模型、许可证、规则和外部服务。仅管理员可访问。"></c-head>
       <div class="seg" style="margin-bottom:12px"><button v-for="t in tabs" :key="t[0]" :class="{on:tab===t[0]}" @click="tab=t[0]" :data-tab="t[0]">{{ t[1] }}</button></div>
       <template v-if="tab==='models'">
+        <div v-if="production" class="panel" style="margin-bottom:12px" id="engine-readiness"><header><h3>真实引擎检查</h3><button class="btn sm" :disabled="checking" @click="checkEngines">{{checking?'检查中…':'刷新检查'}}</button></header><div class="body stack">
+          <div v-if="engineError" class="res-fail">{{engineError}}</div><template v-if="engineStatus"><div v-for="(item,key) in engineStatus.engines" :key="key"><b>{{({concept_image:'概念图生成',image_to_3d:'TRELLIS.2 图生 3D',remove_bg:'BiRefNet 去背景',mesh:'Blender 加工与质检',export:'Draco/KTX2 导出'})[key]}}</b> · <span :class="item.ready?'res-pass':'res-fail'">{{item.ready?'依赖已就绪':'尚未就绪'}}</span><div class="small muted" v-for="message in item.missing" :key="message">{{message}}</div></div>
+          <div class="small muted">依赖就绪后仍需真实推理验收。当前检查不代表 GPU 生成或头显测试已通过。</div></template></div></div>
         <div class="panel" style="margin-bottom:12px"><header><h3>模型登记表</h3><span class="sub">许可字段为“待核对”的模型默认仅内部原型可用</span></header><div class="tbl-wrap"><table class="tbl" id="model-table"><thead><tr><th>模型</th><th>用途</th><th>许可</th><th>授权登记</th><th class="r">显存</th><th class="r">磁盘</th><th>位置</th><th>状态</th><th>允许范围</th></tr></thead><tbody>
           <tr v-for="m in E.S.models" :key="m.id" :data-model="m.id"><td><b>{{ m.name }}</b><div class="faint small">{{ m.version }} · {{ m.engine }}</div></td><td>{{ m.purpose }}</td><td><span class="tag">{{ m.license_type }}</span><span v-if="m.region_restricted" class="tag lic-warn">地域限制</span></td><td><c-pill :kind="{'已登记授权':'ok','无需登记':'plain','待核对':'warn','待授权':'warn','授权待确认':'info'}[m.license_status]" :text="m.license_status"></c-pill></td><td class="r">{{ m.vram_gb }}G</td><td class="r">{{ m.disk_gb }}G</td><td>{{ U.loc(m) }}</td><td>{{ m.status }}</td>
             <td><select class="inp" style="width:auto" :value="m.allowed_scope" @change="setScope(m,$event.target.value); $event.target.value=m.allowed_scope"><option v-for="(n,k) in D.ALLOWED" :key="k" :value="k">{{ n }}</option></select></td></tr></tbody></table></div></div>
@@ -317,12 +339,13 @@ new THREE.GLTFLoader().load('scene.glb',g=>s.add(g.scene));r.setAnimationLoop(()
           <div class="panel"><header><h3>上传授权文件</h3><span class="sub">管理员确认后，允许范围才能改为“全部项目”</span></header><div class="body stack">
             <div class="grid g2"><select class="inp" v-model="up.model"><option v-for="m in E.S.models.filter(x=>x.license_status!=='无需登记')" :key="m.id" :value="m.id">{{ m.name }}</option></select><input class="inp" type="file" @change="onFile" aria-label="授权文件"></div>
             <button class="btn" @click="upload">上传</button>
-            <div class="tbl-wrap"><table class="tbl"><thead><tr><th>模型</th><th>文件</th><th>确认人</th><th>有效期</th><th></th></tr></thead><tbody><tr v-for="l in E.S.licenses" :key="l.id"><td>{{ E.model(l.model_id).name }}</td><td class="small">{{ l.file_name }}</td><td>{{ l.confirmed_by || '—' }}</td><td>{{ l.valid_until || '—' }}</td><td><button class="btn sm primary" v-if="!l.confirmed_by" @click="act(()=>E.confirmLicense(l.id,'2027-12-31'),'已确认授权')">确认</button></td></tr></tbody></table></div>
+            <div class="tbl-wrap"><table class="tbl"><thead><tr><th>模型</th><th>文件</th><th>确认人</th><th>有效期</th><th></th></tr></thead><tbody><tr v-for="l in E.S.licenses" :key="l.id"><td>{{ E.model(l.model_id).name }}</td><td class="small">{{ l.file_name }}</td><td>{{ l.confirmed_by || '—' }}</td><td><input v-if="production && !l.confirmed_by" class="inp" type="date" v-model="licenseDates[l.id]" aria-label="授权有效期"><span v-else>{{ l.valid_until || '—' }}</span></td><td><button class="btn sm primary" v-if="!l.confirmed_by" @click="production?confirmRealLicense(l):act(()=>E.confirmLicense(l.id,'2027-12-31'),'已确认授权')">确认</button></td></tr></tbody></table></div>
           </div></div>
           <div class="panel"><header><h3>登记新模型</h3><span class="sub">通过登记表和 Worker 适配器接入，不改动前端页面</span></header><div class="body stack">
             <div class="grid g2"><div class="field"><label>模型名称</label><input class="inp" v-model="nm.name" placeholder="例：Hi3DGen"></div><div class="field"><label>用途节点</label><select class="inp" v-model="nm.node"><option v-for="(n,k) in D.NODE_NAMES" :key="k" :value="k">{{ n }}</option></select></div>
               <div class="field"><label>许可类型</label><input class="inp" v-model="nm.license_type"></div><div class="field"><label>显存（GB）</label><input class="inp" type="number" v-model.number="nm.vram_gb"></div>
               <div class="field"><label>部署位置</label><select class="inp" v-model="nm.location"><option value="local">本地</option><option value="cloud">云 GPU</option><option value="api">商业 API</option></select></div><div class="field"><label>磁盘（GB）</label><input class="inp" type="number" v-model.number="nm.disk_gb"></div></div>
+            <div class="field" v-if="production && nm.node==='lora'"><label>已部署的 LoRA 文件名</label><input class="inp" v-model="nm.file_name" placeholder="例：my_style.safetensors"><div class="small muted">先将权重放入服务器模型目录的 loras 文件夹，再登记其文件名与许可。</div></div>
             <button class="btn primary" @click="reg">登记</button></div></div>
         </div>
       </template>
@@ -348,7 +371,8 @@ new THREE.GLTFLoader().load('scene.glb',g=>s.add(g.scene));r.setAnimationLoop(()
         <label class="check"><c-switch :model-value="E.S.settings.llm.dataLocal" @update:model-value="v=>setSet('llm.dataLocal',v)"></c-switch>素材不出域（云端 LLM 只接收文字指令和场景结构）</label></div></div></template>
       <template v-if="tab==='presets'"><div class="panel"><header><h3>质检预设</h3><span class="sub">场景级预算采用 Meta 开发者文档推荐值；单件预算为平台默认值，可修改</span></header><div class="tbl-wrap"><table class="tbl"><thead><tr><th>预设</th><th>单件三角形</th><th>贴图</th><th>材质</th><th>文件 MB</th><th>场景三角形</th><th>Draw call</th><th>来源</th></tr></thead><tbody>
         <tr v-for="k in presetKeys" :key="k"><td>{{ E.S.settings.presets[k].name }}</td><td v-for="f in ['tris','tex','materials','size_mb','scene_tris','drawcalls']" :key="f"><input class="inp num" style="width:100px" type="number" :value="E.S.settings.presets[k][f]" @change="setSet('presets.'+k+'.'+f, +$event.target.value)"></td><td class="small muted">{{ E.S.settings.presets[k].src }}</td></tr></tbody></table></div></div></template>
-      <template v-if="tab==='storage'"><div class="panel"><header><h3>存储</h3></header><div class="body stack" style="max-width:640px"><pre class="code">/data
+      <template v-if="tab==='storage' && production"><div class="panel"><header><h3>真实存储</h3></header><div class="body stack"><div>数据目录：{{E.S.settings.storage.assets.path || '等待采样'}}</div><div>已用 / 总量：{{E.S.settings.storage.assets.usedGb}} / {{E.S.settings.storage.assets.totalGb}} GB</div><div>业务状态：workspaces/；不可变文件和索引：files/；执行日志及中间产物：runs/。</div><div class="muted">自动备份、保留期清理与外部介质备份尚未启用。</div></div></div></template>
+      <template v-if="tab==='storage' && !production"><div class="panel"><header><h3>存储</h3></header><div class="body stack" style="max-width:640px"><pre class="code">/data
 ├── models/            # 模型仓库
 ├── assets/
 │   ├── uploads/       # 参考图、采集素材
