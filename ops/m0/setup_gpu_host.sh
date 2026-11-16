@@ -146,4 +146,4 @@ if want --blender; then
   "$SCW_HOME/bpy/bin/python" -c "import bpy; print('Blender', bpy.app.version_string)"
 fi
 
-LOG "完成。下一步：python3 ops/m0/check_env.py --container，然后 python3 ops/m0/download_models.py"
+LOG "完成。下一步：python3 ops/m0/check_env.py --container，然后 $CONDA_DIR/envs/trellis2/bin/python ops/m0/download_models.py"
