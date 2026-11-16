@@ -317,7 +317,7 @@
               <div class="field"><label for="g-seed">seed</label><input id="g-seed" class="inp mono" v-model="f.seed"></div></div>
             <label class="check"><c-switch v-model="f.preview_off"></c-switch>关闭预览渲染（默认开启，避免显存峰值近 30GB 溢出）</label>
             <label class="check"><c-switch v-model="f.oom_demo"></c-switch><span>演示：模拟显存溢出（验证自动降一档重试 1 次）</span></label>
-            <div class="kv small" v-if="ver && ver.raw"><div>本件显存峰值</div><div>{{ ver.raw.vram_peak || '—' }} GB</div><div>本件耗时</div><div>{{ ver.raw.gen_s }} 秒（模拟）</div><div>实际模型</div><div>{{ E.model(ver.model_id).name }}</div><div>实际参数</div><div class="mono">{{ ver.params ? (ver.params.resolution+'³ / '+ver.params.texture+' / seed '+ver.seed) : '' }}</div></div>
+            <div class="kv small" v-if="ver && ver.raw"><div>本件显存峰值</div><div>{{ ver.raw.vram_peak || '—' }} GB</div><div>本件耗时</div><div>{{ ver.raw.gen_s }} 秒{{ st.production ? '' : '（模拟）' }}</div><div>实际模型</div><div>{{ E.model(ver.model_id).name }}</div><div>实际参数</div><div class="mono">{{ ver.params ? (ver.params.resolution+'³ / '+ver.params.texture+' / seed '+ver.seed) : '' }}</div></div>
             <div class="row"><button class="btn" :disabled="!asset || !canEdit" @click="regen">重新生成当前件</button><button class="btn danger" :disabled="!asset || !canEdit" @click="discard">丢弃</button></div>
           </div></div>
         </div>
@@ -355,7 +355,7 @@
       const toQA = () => act(() => E.sendToQA(asset.value.id), '已送入质检');
       // 同步旋转
       let L = null, R = null; const onL = (v) => { L = v; link(); }, onR = (v) => { R = v; link(); };
-      function link() { if (!L || !R) return; let lock = false; const cp = (a, b) => { if (lock) return; lock = true; b.camera.position.copy(a.camera.position); b.controls.target.copy(a.controls.target); b.camera.updateMatrixWorld(); lock = false; }; L.controls.addEventListener('change', () => cp(L, R)); R.controls.addEventListener('change', () => cp(R, L)); }
+      function link() { if (!L || !R) return; let lock = false; const cp = (a, b) => { if (lock || !a.home || !b.home) return; lock = true; const ratio = b.home.size / a.home.size; b.controls.target.copy(a.controls.target).sub(a.home.t).multiplyScalar(ratio).add(b.home.t); b.camera.position.copy(a.camera.position).sub(a.controls.target).multiplyScalar(ratio).add(b.controls.target); b.camera.updateMatrixWorld(); lock = false; }; L.controls.addEventListener('change', () => cp(L, R)); R.controls.addEventListener('change', () => cp(R, L)); }
       return { list, selId, batch, asset, ver, preset, manual, wire, custom, P_, rawInfo, optInfo, task, steps, stepState, rows, canEdit, run, sameBatch, toQA, onL, onR, E, D, U, st };
     },
     template: `<div class="page" :data-r="st.rev">

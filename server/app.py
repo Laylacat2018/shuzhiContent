@@ -181,14 +181,14 @@ class LoginIn(BaseModel):
 
 
 @app.post("/api/v1/auth/login")
-def login(body: LoginIn) -> dict:
+def login(body: LoginIn, request: Request) -> dict:
     if not auth.check_password(body.user_id, body.password):
         raise HTTPException(401, "账号或密码错误")
     ws = H().ensure((body.workspace or DEFAULT_WS).strip().lower())
     H().call(ws, body.user_id, None, "audit", ["登录", auth.USERS[body.user_id]["name"], auth.USERS[body.user_id]["role"]])
     token = auth.issue(body.user_id, ws)
     response = JSONResponse({"token": token, "user": {"id": body.user_id, **auth.USERS[body.user_id]}, "workspace": ws})
-    response.set_cookie("scw_session", token, httponly=True, samesite="strict", secure=os.getenv("SCW_COOKIE_SECURE") == "1", max_age=auth.TTL)
+    response.set_cookie("scw_session", token, httponly=True, samesite="strict", secure=os.getenv("SCW_COOKIE_SECURE") == "1" or request.url.scheme == 'https', max_age=auth.TTL)
     return response
 
 

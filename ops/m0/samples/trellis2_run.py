@@ -16,6 +16,7 @@ import json
 import os
 import sys
 import time
+from pathlib import Path
 
 os.environ.setdefault("OPENCV_IO_ENABLE_OPENEXR", "1")
 os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
@@ -46,6 +47,7 @@ def main() -> int:
     ap.add_argument("--steps", type=int, default=None, help="各阶段采样步数；不填用模型默认")
     ap.add_argument("--model", default="microsoft/TRELLIS.2-4B")
     ap.add_argument("--no-retry", action="store_true", help="由平台调度器统一管理一次 OOM 重试")
+    ap.add_argument("--remesh", action="store_true", help="额外 GPU 重建网格；默认使用原始表面清理，随后由 Blender 重拓扑")
     a = ap.parse_args()
 
     import torch
@@ -56,6 +58,13 @@ def main() -> int:
     meta = {"engine": "TRELLIS.2", "model": a.model, "image": a.image, "seed": a.seed, "preview_render": False, "attempts": []}
     t_load = time.time()
     pipeline = Trellis2ImageTo3DPipeline.from_pretrained(a.model)
+    sys.path.insert(0,str(Path(__file__).resolve().parents[3]))
+    from ops.production.trellis_compat import configure_feature_extractor
+    configure_feature_extractor(pipeline.image_cond_model)
+    # The upstream background remover creates float32 inputs. Transformers may
+    # honor fp16 in the dependency config; use the same input/weight precision.
+    if pipeline.rembg_model is not None and hasattr(pipeline.rembg_model, 'model'):
+        pipeline.rembg_model.model.float().eval()
     pipeline.cuda()
     meta["load_seconds"] = round(time.time() - t_load, 1)
     image = Image.open(a.image)
@@ -77,11 +86,13 @@ def main() -> int:
             print(json.dumps(meta, ensure_ascii=False)); return 2
 
     t0 = time.time()
+    print('阶段：生成已完成，开始清理表面与烘焙 GLB',flush=True)
+    torch.cuda.empty_cache()
     mesh.simplify(16777216)  # nvdiffrast 上限（官方示例）
     glb = o_voxel.postprocess.to_glb(
         vertices=mesh.vertices, faces=mesh.faces, attr_volume=mesh.attrs, coords=mesh.coords, attr_layout=mesh.layout,
         voxel_size=mesh.voxel_size, aabb=[[-0.5, -0.5, -0.5], [0.5, 0.5, 0.5]],
-        decimation_target=a.decimate, texture_size=a.texture, remesh=True, remesh_band=1, remesh_project=0, verbose=False)
+        decimation_target=a.decimate, texture_size=a.texture, remesh=a.remesh, remesh_band=1, remesh_project=0, verbose=True)
     os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
     glb.export(a.out, extension_webp=False)  # PNG 贴图，便于后续 Blender / glTF 校验通用读取
     meta.update(status="done", resolution=res, export_seconds=round(time.time() - t0, 1), file=a.out,

@@ -62,6 +62,23 @@ def test_real_upload_is_workspace_scoped_and_byte_preserving(api):
     assert client.get('/api/v1/state').status_code==401
 
 
+def test_https_session_cookie_is_secure_and_local_http_still_works(api):
+    client,app=api
+    body={'user_id':'u_admin','password':'demo-2026','workspace':'real-test'}
+    local=client.post('/api/v1/auth/login',json=body)
+    assert local.status_code==200 and '; Secure' not in local.headers['set-cookie']
+    cloud=client.post('https://testserver/api/v1/auth/login',json=body)
+    assert cloud.status_code==200 and '; Secure' in cloud.headers['set-cookie']
+
+
+def test_unsupported_gpu_power_does_not_discard_memory_metrics(api,monkeypatch):
+    client,app=api
+    monkeypatch.setattr('subprocess.check_output',lambda *a,**kw:'3072, 24564, 7, 47, [N/A]\n')
+    gpu=app.runtime.metrics()['gpu']
+    assert gpu['vram']==3 and gpu['total']>23
+    assert gpu['util']==7 and gpu['power'] is None
+
+
 def test_reviewer_cannot_cancel_job_and_client_cannot_inject_fields(api):
     client,app=api;admin=login(client)
     req={'title':'道具','is_heritage':False,'platforms':['quest3'],'quantity':1}
@@ -159,10 +176,11 @@ def test_cancel_really_terminates_the_worker_process(api,tmp_path):
 
 
 @pytest.mark.skipif(not os.getenv('SCW_BPY_PYTHON'),reason='requires actual Blender bpy')
-def test_mesh_processing_and_qa_use_real_glb(tmp_path):
+@pytest.mark.parametrize('open_surface',[False,True])
+def test_mesh_processing_and_qa_use_real_glb(tmp_path,open_surface):
     script=ROOT/'tests/fixtures/create_mesh.py';py=os.environ['SCW_BPY_PYTHON']
     source=tmp_path/'source.glb'
-    r=subprocess.run([py,str(script),str(source)],capture_output=True,text=True,timeout=120)
+    r=subprocess.run([py,str(script),str(source)]+(['--open-sheet'] if open_surface else []),capture_output=True,text=True,timeout=120)
     assert r.returncode==0,r.stdout+r.stderr
     request={'input':str(source),'output':str(tmp_path/'low.glb'),'blend':str(tmp_path/'low.blend'),'report':str(tmp_path/'report.json'),'operation':'optimize','preset':{'tris':5000,'tex':256,'materials':1},'mark':{'generated':True,'model':'TEST FIXTURE','seed':1,'time':'2026-11-16T00:00:00Z'}}
     req=tmp_path/'request.json';req.write_text(json.dumps(request),'utf-8')
@@ -172,9 +190,27 @@ def test_mesh_processing_and_qa_use_real_glb(tmp_path):
     assert result['stats']['tris']<=5000
     assert result['stats']['texture']==256 and result['stats']['materials']==1
     assert result['stats']['origin_offset_m']<.005
+    assert result['stats']['nonmanifold']==0
     assert result['mark_valid']
+    assert 'QuadriFlow 已实际生成新拓扑' in r.stdout
     assert (tmp_path/'low.blend').stat().st_size>0
     assert [i['rule'] for i in result['items']]==['Q01','Q02','Q03','Q04','Q05','Q06','Q07']
+
+
+@pytest.mark.skipif(not os.getenv('SCW_BPY_PYTHON'),reason='requires actual Blender bpy')
+def test_mesh_fix_removes_isolated_open_fragment_without_changing_main_surface(tmp_path):
+    py=os.environ['SCW_BPY_PYTHON'];source=tmp_path/'source.glb'
+    made=subprocess.run([py,str(ROOT/'tests/fixtures/create_mesh.py'),str(source),'--open-fragment'],capture_output=True,text=True,timeout=120)
+    assert made.returncode==0,made.stdout+made.stderr
+    request={'input':str(source),'output':str(tmp_path/'fixed.glb'),'blend':str(tmp_path/'fixed.blend'),'report':str(tmp_path/'fixed.json'),'operation':'fix','preset':{'tris':20000,'tex':256,'materials':1}}
+    req=tmp_path/'request.json';req.write_text(json.dumps(request),'utf-8')
+    fixed=subprocess.run([py,str(ROOT/'ops/production/mesh_pipeline.py'),str(req)],capture_output=True,text=True,timeout=120)
+    assert fixed.returncode==0,(fixed.stdout+fixed.stderr)[-4000:]
+    result=json.loads((tmp_path/'fixed.json').read_text('utf-8'))
+    assert result['stats']['nonmanifold']==0
+    assert result['stats']['flipped']==0
+    assert result['stats']['size_m']==[1.0,1.0,1.0]
+    assert '已移除 1 个小型孤立开放碎面' in fixed.stdout
 
 
 @pytest.mark.skipif(not os.getenv('SCW_BPY_PYTHON') or not os.getenv('SCW_KTX_BIN'),reason='requires Blender and KTX tools')

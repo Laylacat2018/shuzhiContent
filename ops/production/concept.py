@@ -43,7 +43,11 @@ def main(o):
     if o.get('remove_bg',True):
         sys.path.insert(0,o['trellis_home'])
         from trellis2.pipelines.rembg import BiRefNet
-        model=BiRefNet();model.cuda()
+        model=BiRefNet()
+        # This extractor creates float32 inputs; recent Transformers may load the
+        # repository's configured fp16 weights. Keep the inference types aligned.
+        model.model.float().eval()
+        model.cuda()
         for p in paths:
             im=Image.open(p).convert('RGB');im=model(im)
             im.save(p)

@@ -7,7 +7,7 @@ import sys
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[2]))
 from ops.m0.download_verified import download
-from ops.production.model_plan import PUBLIC,GATED,QWEN_REPO,QWEN_FILES
+from ops.production.model_plan import PUBLIC,GATED,GATED_FILES,QWEN_REPO,QWEN_FILES
 
 
 def main():
@@ -16,7 +16,7 @@ def main():
     p.add_argument('--with-gated',action='store_true',help='Requires your own HF login and approved access')
     a=p.parse_args()
     root=Path(os.getenv('HF_HOME','/data/models/hf'));cache=root/'hub'
-    for repo,files in PUBLIC+([(repo,['*.json','*.safetensors','*.py']) for repo in GATED] if a.with_gated else []):
+    for repo,files in PUBLIC+([(repo,GATED_FILES[repo]) for repo in GATED] if a.with_gated else []):
         snapshot=download(repo,cache,min(32,max(1,a.workers)),8*1024*1024,files)
         if repo==QWEN_REPO:
             models=Path(os.getenv('SCW_MODEL_DIR','/data/models/comfyui'))

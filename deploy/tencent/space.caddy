@@ -1,0 +1,20 @@
+# Managed by SCW real pipeline. Import this file from the existing Caddyfile.
+space.migucomi.com {
+    encode zstd gzip
+    header X-Content-Type-Options nosniff
+
+    @internal_pages path /standalone /api/docs /api/openapi.json
+    respond @internal_pages 404
+
+    reverse_proxy 127.0.0.1:18780 {
+        header_up X-Forwarded-Proto {scheme}
+        transport http {
+            dial_timeout 10s
+            response_header_timeout 120s
+        }
+    }
+
+    handle_errors {
+        respond "生产服务节点暂时离线，请联系管理员启动服务。" 503
+    }
+}

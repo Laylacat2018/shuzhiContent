@@ -47,6 +47,51 @@ def activate(obj):
     obj.hide_set(False); obj.select_set(True); bpy.context.view_layer.objects.active = obj
 
 
+def remove_open_fragments(bm):
+    """Remove tiny disconnected open scraps; preserve the main mesh and closed pieces."""
+    import bmesh
+    pending=set(bm.faces);components=[]
+    while pending:
+        faces={pending.pop()};stack=list(faces)
+        while stack:
+            face=stack.pop()
+            for edge in face.edges:
+                neighbors={f for f in edge.link_faces if f in pending}
+                pending.difference_update(neighbors);faces.update(neighbors);stack.extend(neighbors)
+        components.append(faces)
+    largest=max((sum(f.calc_area() for f in faces) for faces in components),default=0)
+    remove=[]
+    for faces in components:
+        if len(faces)<=12 and sum(f.calc_area() for f in faces)<largest*.01 and any(e.is_boundary for f in faces for e in f.edges):
+            remove.extend(faces)
+    if remove:
+        bmesh.ops.delete(bm,geom=remove,context='FACES')
+        loose=[v for v in bm.verts if not v.link_faces]
+        if loose:bmesh.ops.delete(bm,geom=loose,context='VERTS')
+    return len(remove)
+
+
+def topology_signature(mesh):
+    from array import array
+    coordinates=array('f',[0])*len(mesh.vertices)*3
+    corners=array('i',[0])*len(mesh.loops)
+    mesh.vertices.foreach_get('co',coordinates);mesh.loops.foreach_get('vertex_index',corners)
+    return hashlib.sha256(coordinates.tobytes()+corners.tobytes()).digest()
+
+
+def clean_surface(obj):
+    import bmesh
+    bm=bmesh.new();bm.from_mesh(obj.data)
+    bmesh.ops.remove_doubles(bm,verts=list(bm.verts),dist=.00001)
+    bmesh.ops.dissolve_degenerate(bm,edges=list(bm.edges),dist=.000001)
+    removed=remove_open_fragments(bm)
+    if removed:print(f'已移除 {removed} 个小型孤立开放碎面，保留主体和封闭部件',flush=True)
+    boundary=[e for e in bm.edges if e.is_boundary]
+    if boundary:bmesh.ops.holes_fill(bm,edges=boundary,sides=12)
+    bmesh.ops.triangulate(bm,faces=list(bm.faces))
+    bmesh.ops.recalc_face_normals(bm,faces=list(bm.faces));bm.to_mesh(obj.data);bm.free()
+
+
 def uv_overlap(objs, size=512):
     """Rasterize UV triangle interiors. Shared edges are excluded from overlap counts."""
     import numpy as np
@@ -184,36 +229,63 @@ def main(request):
             high = low.copy(); high.data = low.data.copy(); bpy.context.collection.objects.link(high); high.name='SourceHigh'
             bm=bmesh.new();bm.from_mesh(low.data)
             bmesh.ops.remove_doubles(bm,verts=list(bm.verts),dist=.00001)
-            bmesh.ops.recalc_face_normals(bm,faces=list(bm.faces));bm.to_mesh(low.data);bm.free()
+            bmesh.ops.recalc_face_normals(bm,faces=list(bm.faces))
+            needs_repair=any(not e.is_manifold for e in bm.edges)
+            bm.to_mesh(low.data);bm.free()
             activate(low)
             print('阶段 1/5：预算减面与几何清理',flush=True)
             tris = sum(len(p.vertices)-2 for p in low.data.polygons)
-            if tris>target:
+            if tris>target and not needs_repair:
                 dec = low.modifiers.new('BudgetDecimate','DECIMATE');dec.ratio=min(1,target/max(tris,1)*.98);dec.use_collapse_triangulate=True
                 activate(low);bpy.ops.object.modifier_apply(modifier=dec.name)
             print('阶段 2/5：QuadriFlow 自动重拓扑',flush=True)
+            topology=bmesh.new();topology.from_mesh(low.data)
+            needs_repair=needs_repair or any(not edge.is_manifold for edge in topology.edges)
+            topology.free()
+            if needs_repair:
+                # Generated surfaces can contain intersecting sheets or open edges.
+                # Rebuild only the low mesh; keep the textured high mesh for baking.
+                low.data.remesh_voxel_size=max(low.dimensions)/96
+                low.data.remesh_voxel_adaptivity=.1
+                repaired=bpy.ops.object.voxel_remesh()
+                if 'FINISHED' not in repaired:raise RuntimeError('体素修复未完成，请转人工处理')
+                print('已对低模执行体素拓扑修复，高模保留用于 PBR 烘焙',flush=True)
+                # Voxel rebuilding can expand to hundreds of thousands of faces.
+                # Bound QuadriFlow's input, rather than feeding it the voxel grid.
+                count=sum(len(p.vertices)-2 for p in low.data.polygons)
+                if count>target*4:
+                    dec=low.modifiers.new('RemeshInputBudget','DECIMATE');dec.ratio=target*4/count;dec.use_collapse_triangulate=True
+                    bpy.ops.object.modifier_apply(modifier=dec.name)
+            # Blender 4.2 rejects component-wise edge deltas <=1e-4 even on a
+            # manifold voxel mesh, and still returns FINISHED on that rejection.
+            bm=bmesh.new();bm.from_mesh(low.data)
+            short=[e for e in bm.edges if max(abs(x) for x in e.verts[0].co-e.verts[1].co)<=.00011]
+            if short:bmesh.ops.collapse(bm,edges=short,uvs=False)
+            bmesh.ops.recalc_face_normals(bm,faces=list(bm.faces));bm.to_mesh(low.data);bm.free();low.data.update()
+            before=topology_signature(low.data)
             try:
-                bpy.ops.object.quadriflow_remesh(target_faces=max(100,target//2),use_mesh_symmetry=False,use_preserve_sharp=True,use_preserve_boundary=True)
+                result=bpy.ops.object.quadriflow_remesh(target_faces=max(100,target//2),use_mesh_symmetry=False,use_preserve_sharp=True,use_preserve_boundary=True)
+                if 'FINISHED' not in result or topology_signature(low.data)==before:raise RuntimeError('QuadriFlow 未生成新拓扑')
             except RuntimeError as e:
                 raise RuntimeError('自动重拓扑失败，请转人工处理：'+str(e)) from e
+            print('QuadriFlow 已实际生成新拓扑',flush=True)
             tris=sum(len(p.vertices)-2 for p in low.data.polygons)
             if tris>target:
                 dec=low.modifiers.new('FinalBudget','DECIMATE');dec.ratio=target/max(tris,1)*.98;dec.use_collapse_triangulate=True;bpy.ops.object.modifier_apply(modifier=dec.name)
+            # Finish all topology changes before UV layout and baking.
+            clean_surface(low)
+            count=sum(len(p.vertices)-2 for p in low.data.polygons)
+            if count>target:
+                dec=low.modifiers.new('RepairBudget','DECIMATE');dec.ratio=target/count*.98;dec.use_collapse_triangulate=True
+                bpy.ops.object.modifier_apply(modifier=dec.name);clean_surface(low)
+            if sum(len(p.vertices)-2 for p in low.data.polygons)>target:raise ValueError('修复后的面数仍超预算，需要人工重拓扑')
             print('阶段 3/5：重新展开 UV',flush=True)
             activate(low);bpy.ops.object.mode_set(mode='EDIT');bpy.ops.mesh.select_all(action='SELECT');bpy.ops.uv.smart_project(angle_limit=math.radians(66),island_margin=.015);bpy.ops.object.mode_set(mode='OBJECT')
             print('阶段 4/5：CPU PBR 烘焙',flush=True)
             bake(high,low,int(request['preset']['tex']))
             bpy.data.objects.remove(high,do_unlink=True)
         activate(low)
-        bm = bmesh.new();bm.from_mesh(low.data)
-        bmesh.ops.remove_doubles(bm,verts=list(bm.verts),dist=.00001)
-        bmesh.ops.dissolve_degenerate(bm,edges=list(bm.edges),dist=.000001)
-        # Close small holes only; extensive defects stay visible for manual review.
-        boundary=[e for e in bm.edges if e.is_boundary]
-        if boundary:bmesh.ops.holes_fill(bm,edges=boundary,sides=12)
-        bmesh.ops.recalc_face_normals(bm,faces=list(bm.faces));bm.to_mesh(low.data);bm.free()
-        if operation == 'optimize' and sum(len(p.vertices)-2 for p in low.data.polygons)>target:
-            raise ValueError('修复后的面数仍超预算，需要人工重拓扑')
+        if operation=='fix':clean_surface(low)
         bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY',center='BOUNDS')
         zmin=min((low.matrix_world@v.co).z for v in low.data.vertices)
         bpy.context.scene.cursor.location=(low.location.x,low.location.y,zmin);bpy.ops.object.origin_set(type='ORIGIN_CURSOR');low.location=(0,0,0)
@@ -238,7 +310,7 @@ def main(request):
     item('Q07','尺寸与原点',str(size)+' m; 原点偏移 '+str(origin)+'m','最大尺寸 0.1–3m; 底部中心偏移≤0.005m',.1<=max(size)<=3 and origin<=.005,'可修复')
     actual=glb_json(path).get('asset',{}).get('extras',{}).get('AIGC')
     expected=request.get('mark')
-    mark_valid=bool(actual and expected and all(actual.get(k)==expected.get(k) for k in ['model','seed','time','generated']))
+    mark_valid=bool(actual and expected and all(actual.get(k)==expected.get(k) for k in ['model','seed','time','generated','label']))
     result=dict(stats=stat,items=items,mark_valid=mark_valid,sha256=hashlib.sha256(path.read_bytes()).hexdigest(),seconds=round(time.monotonic()-started,3))
     Path(request['report']).write_text(json.dumps(result,ensure_ascii=False,indent=2),'utf-8')
     print(json.dumps(result,ensure_ascii=False),flush=True)

@@ -12,3 +12,7 @@ PUBLIC=[
     ('ZhengPeng7/BiRefNet',['*.json','*.py','model.safetensors']),
 ]
 GATED=['facebook/dinov3-vitl16-pretrain-lvd1689m','briaai/RMBG-2.0']
+GATED_FILES={
+    'facebook/dinov3-vitl16-pretrain-lvd1689m':['*.json','*.safetensors'],
+    'briaai/RMBG-2.0':['*.json','*.safetensors','*.py'],
+}

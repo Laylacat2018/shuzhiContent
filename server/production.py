@@ -135,8 +135,13 @@ class Runtime:
     def metrics(self):
         result = {"runtime": {"mode": "production", "workers": {"gpu": 1, "cpu": 3}, "sampled_at": int(time.time() * 1000)}}
         try:
-            raw = subprocess.check_output(["nvidia-smi", "--query-gpu=memory.used,memory.total,utilization.gpu,temperature.gpu,power.draw", "--format=csv,noheader,nounits"], timeout=5, text=True)
-            used, total, util, temp, power = [float(x.strip()) for x in raw.splitlines()[0].split(",")]
+            smi=shutil.which('nvidia-smi') or '/usr/lib/wsl/lib/nvidia-smi'
+            raw = subprocess.check_output([smi, "--query-gpu=memory.used,memory.total,utilization.gpu,temperature.gpu,power.draw", "--format=csv,noheader,nounits"], timeout=5, text=True)
+            def numeric(value):
+                try:return float(value.strip())
+                except ValueError:return None
+            used, total, util, temp, power = [numeric(x) for x in raw.splitlines()[0].split(",")]
+            if used is None or total is None:raise ValueError('GPU memory metrics unavailable')
             result["gpu"] = dict(vram=round(used / 1024, 2), total=round(total / 1024, 2), util=util, temp=temp, power=power)
         except (OSError, ValueError, subprocess.SubprocessError):
             result["runtime"]["gpu_error"] = "无法读取 nvidia-smi"
@@ -274,7 +279,8 @@ class Runtime:
                 raise RuntimeError("空闲显存不足 17GB，拒绝加载 TRELLIS.2；请先释放其他 GPU 工作负载")
             c = next(c for c in S["concepts"] if c["id"] == t["concept_id"])
             self.files.verify(ws, c["file_id"])
-            mark = {"label": "AI 复原 · AI 生成", "model": "TRELLIS.2-4B", "concept_model": "Qwen-Image", "seed": t["params"]["seed"], "generated": True, "time": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+            job=next(j for j in S['jobs'] if j['id']==t['job_id'])
+            mark = {"label": "AI 复原 · AI 生成" if job.get('ai_restore') else "AI 生成", "model": "TRELLIS.2-4B", "concept_model": "Qwen-Image", "seed": t["params"]["seed"], "generated": True, "time": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
             argv = [self.cfg.trellis_python, ROOT / "ops/m0/samples/trellis2_run.py", "--no-retry", "--image", self.files.path(ws, c["file_id"]), "--out", folder / "raw.glb", "--resolution", str(t["params"].get("resolution", 1024)), "--texture", str(t["params"].get("texture", 2048)), "--seed", str(t["params"]["seed"]), "--steps", str(t["params"].get("steps", 25))]
             self.command(ws, t, argv, folder, {"TRELLIS2_HOME": self.cfg.trellis_home, "HF_HOME": os.getenv("HF_HOME", "/data/models/hf")})
             stats = self.mesh(ws, t, folder, folder / "raw.glb", "inspect", preset, mark)
@@ -283,6 +289,7 @@ class Runtime:
             return dict(stats=stats["stats"], file=file, aigc_mark=mark, vram_peak_gb=model_meta['vram_peak_gb'])
         if t["node"] in ("mesh_optimize", "mesh_fix", "manual_import"):
             fid = t["params"].get("file_id") if t["node"] == "manual_import" else version["file_id"]
+            if t["node"] == "mesh_optimize": fid = version.get("raw_file_id") or fid
             self.files.verify(ws, fid)
             result = self.mesh(ws, t, folder, self.files.path(ws, fid), "optimize" if t["node"] == "mesh_optimize" else "fix" if t["node"] == "mesh_fix" else "inspect", preset, version.get("aigc_mark"))
             blend = self.files.put(ws, "project.blend", folder / "project.blend")

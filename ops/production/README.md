@@ -48,6 +48,12 @@ bash ops/production/start_comfy.sh
 
 本机 PyTorch 2.6 与当前 comfy-kitchen 的类型注解兼容由 `comfy_entry.py` 处理：仅在 torch 自然加载后修正注解，不修改张量计算或提前初始化 CUDA allocator。服务在线仍不代表 GPU 推理验收通过。
 
+WSL 启动会关闭 pinned memory、异步显存换载和 cudaMallocAsync，以避免本机实测中的换载卡死；普通 Linux 保留 ComfyUI 默认设置。BiRefNet 显式使用 float32 权重，与其输入类型对齐，避免 Transformers 按仓库配置加载 fp16 后的类型冲突。2026-11-16 已完成全部权重校验和单件真实 GPU 闭环，详见仓库验收记录。
+
+DINOv3 已获准并完成权重校验。`trellis_compat.py` 兼容新 Transformers 的 DINOv3 编码器布局，保留 TRELLIS 原有的最终归一化语义，已通过数值对照。GPU 网格导出默认采用上游支持的原始表面清理路径；额外 GPU 重建需显式传 `--remesh`，其高面数开销不适合作为本机默认值。后续仍执行 Blender 重拓扑与烘焙。显卡遥测兼容 systemd 的 WSL 工具路径，以及不提供功耗等可选指标的驱动。
+
+Windows 可运行 `install-windows-startup.ps1`，安装当前用户的 `SCW-Real-Platform` 登录启动任务。它通过等待真实服务保持 WSL 会话，平台重启后也会继续等待。需要停用时先停止该任务，再停用对应的本机服务。
+
 安装受管服务与继续下载：
 
 ```bash
@@ -67,6 +73,8 @@ HF_HOME=/data/models/hf /opt/scw/miniforge3/envs/trellis2/bin/python ops/product
 ```
 
 已有本地 Qwen 文件可用 `HF_HOME=/data/models/hf /opt/scw/miniforge3/envs/trellis2/bin/python ops/production/reuse_models.py /mnt/d/ComfyUI/models` 核对并复用。仅接收大小和官方 SHA-256 一致的文件，保留源文件。Windows 登录也可运行 `login-hf.ps1`，确保凭据保存在服务实际使用的 HF_HOME。
+
+用户已登录后，可启用 `systemctl enable --now scw-gated-download` 继续下载受限依赖。该下载器只访问用户已获准的模型；访问待审批或网络失败时每 15 分钟重试，不会自动申请权限或接受条款，也不会反复读取整个公开模型仓。日志在 `/data/logs/scw-download-gated.log`。DINOv3 没有 Python 源码文件，下载清单不要求不存在的 `*.py`。
 
 ## 数据和执行边界
 
@@ -93,3 +101,5 @@ SCW_NODE=/usr/local/bin/node \
 该套测试明确使用 TEST FIXTURE 标识的 Blender 模型验证加工、Q01–Q09、审核入库、不可变版本、压缩打包、工作区隔离、权限和持久化。不会把测试模型当作 AI 推理验收。
 
 完整 GPU 验收必须另外保存：ComfyUI 真图、TRELLIS.2 高模、优化文件、质检报告、审批记录、交付包、用时和显存轨迹。DINOv3 和 RMBG-2.0 的访问许可由用户自己的 Hugging Face 账号申请，在本机 `hf auth login`；不要把 Token 发到聊天或写进仓库。
+
+Blender 自动加工先修复开放表面并限制 QuadriFlow 输入规模；极短边按实际几何处理，算子返回完成时还检查网格是否变化。清理、补洞和三角化均在 UV 与烘焙之前完成，避免烘焙后改动拓扑破坏 UV。重复优化从原始高模开始，避免累积减面和纹理损失。

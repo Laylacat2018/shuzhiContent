@@ -95,7 +95,7 @@
     const c = new T.Vector3((bbox.min[0] + bbox.max[0]) / 2, (bbox.min[1] + bbox.max[1]) / 2, (bbox.min[2] + bbox.max[2]) / 2);
     const s = Math.max(bbox.max[0] - bbox.min[0], bbox.max[1] - bbox.min[1], bbox.max[2] - bbox.min[2]);
     this.controls.target.copy(c); this.camera.position.set(c.x + s * 1.3 * (k || 1), c.y + s * 0.7 * (k || 1), c.z + s * 1.7 * (k || 1)); this.camera.near = s / 100; this.camera.far = s * 60; this.camera.updateProjectionMatrix();
-    this.home = { p: this.camera.position.clone(), t: c.clone() };
+    this.home = { p: this.camera.position.clone(), t: c.clone(), size: s };
   };
   Base.prototype.reset = function () { if (!this.home) return; this.camera.position.copy(this.home.p); this.controls.target.copy(this.home.t); };
   Base.prototype.snapshot = function () { this.renderer.render(this.scene, this.camera); return this.renderer.domElement.toDataURL('image/png'); };

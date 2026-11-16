@@ -2432,7 +2432,7 @@ pre.code { font-family: var(--f-mono); font-size: 11.5px; background: var(--surf
     } else if (t.node === 'image_to_3d') {
       const c = E.S.concepts.find(c => c.id === t.concept_id);
       let a = t.asset_id && E.asset(t.asset_id);
-      if (!a) { a = { id: uid('a'), code: 'SC-' + E.S.seq, name: (E.job(t.job_id).title || '道具') + ' ' + E.S.seq, project_id: t.project_id || E.job(t.job_id).project_id, job_id: t.job_id, type: 'prop', source: '生成', heritage: false, ai_restore: true, category: 'vase', prompt: c.prompt, concept_id: c.id, versions: [], tags: [], scenes: [], history: [], rework_count: 0, created_at: Date.now(), preset: E.job(t.job_id).preset }; E.S.assets.unshift(a); t.asset_id = a.id; }
+      if (!a) { a = { id: uid('a'), code: 'SC-' + E.S.seq, name: (E.job(t.job_id).title || '道具') + ' ' + E.S.seq, project_id: t.project_id || E.job(t.job_id).project_id, job_id: t.job_id, type: 'prop', source: '生成', heritage: false, ai_restore: !!E.job(t.job_id).ai_restore, category: 'vase', prompt: c.prompt, concept_id: c.id, versions: [], tags: [], scenes: [], history: [], rework_count: 0, created_at: Date.now(), preset: E.job(t.job_id).preset }; E.S.assets.unshift(a); t.asset_id = a.id; }
       const chain = (c.license_chain || []).concat([{ stage: '3D 生成', model_id: t.model_id, model_name: E.model(t.model_id).name, license: E.model(t.model_id).license_type }], ['dinov3','bria-rmbg2'].map(id => ({ stage: '3D 模型依赖', model_id: id, model_name: E.model(id).name, license: E.model(id).license_type })));
       const v = version(a, Object.assign({ stage: 'raw', raw: out.stats, opt: null, seed: t.params.seed, params: t.params, model_id: t.model_id, parent_task_id: tid, category: 'vase', license_chain: chain, aigc_mark: out.aigc_mark, defects: {}, qa_id: null }, out.file));
       a.status = 'generated'; a.model_id = t.model_id;
@@ -2443,7 +2443,7 @@ pre.code { font-family: var(--f-mono); font-size: 11.5px; background: var(--surf
       const v = version(a, Object.assign({}, base, { stage: 'optimized', raw: base.raw, raw_file_id: base.raw_file_id || base.file_id, opt: out.stats, preset: out.stats.preset, approved: false, qa_id: null, blend_file_id: out.blend_file_id, license_chain: base.license_chain, params: base.params }, out.file));
       // version() owns identity even when copying an old version.
       if (t.params.manual) { a.status = 'manual'; a.manual_note = '请下载真实高模、低模和 .blend，人工处理后上传 GLB'; }
-      else { a.status = 'qa'; E.enqueue({ project_id: a.project_id, job_id: a.job_id, node: 'auto_qa', model_id: 'blender', queue: 'cpu', asset_id: a.id, version_id: v.id, params: {} }); }
+      else { a.status = 'qa'; delete a.manual_note; E.enqueue({ project_id: a.project_id, job_id: a.job_id, node: 'auto_qa', model_id: 'blender', queue: 'cpu', asset_id: a.id, version_id: v.id, params: {} }); }
     } else if (t.node === 'auto_qa') {
       const a = E.asset(t.asset_id), v = E.version(t.version_id); qa(a, v, out);
     } else if (t.node === 'export') {
@@ -2573,7 +2573,7 @@ pre.code { font-family: var(--f-mono); font-size: 11.5px; background: var(--surf
     const c = new T.Vector3((bbox.min[0] + bbox.max[0]) / 2, (bbox.min[1] + bbox.max[1]) / 2, (bbox.min[2] + bbox.max[2]) / 2);
     const s = Math.max(bbox.max[0] - bbox.min[0], bbox.max[1] - bbox.min[1], bbox.max[2] - bbox.min[2]);
     this.controls.target.copy(c); this.camera.position.set(c.x + s * 1.3 * (k || 1), c.y + s * 0.7 * (k || 1), c.z + s * 1.7 * (k || 1)); this.camera.near = s / 100; this.camera.far = s * 60; this.camera.updateProjectionMatrix();
-    this.home = { p: this.camera.position.clone(), t: c.clone() };
+    this.home = { p: this.camera.position.clone(), t: c.clone(), size: s };
   };
   Base.prototype.reset = function () { if (!this.home) return; this.camera.position.copy(this.home.p); this.controls.target.copy(this.home.t); };
   Base.prototype.snapshot = function () { this.renderer.render(this.scene, this.camera); return this.renderer.domElement.toDataURL('image/png'); };
@@ -5931,7 +5931,7 @@ return function render(_ctx, _cache) {
                   _hoisted_66,
                   _createElementVNode("div", null, _toDisplayString(_ctx.ver.raw.vram_peak || '—') + " GB", 1 /* TEXT */),
                   _hoisted_67,
-                  _createElementVNode("div", null, _toDisplayString(_ctx.ver.raw.gen_s) + " 秒（模拟）", 1 /* TEXT */),
+                  _createElementVNode("div", null, _toDisplayString(_ctx.ver.raw.gen_s) + " 秒" + _toDisplayString(_ctx.st.production ? '' : '（模拟）'), 1 /* TEXT */),
                   _hoisted_68,
                   _createElementVNode("div", null, _toDisplayString(_ctx.E.model(_ctx.ver.model_id).name), 1 /* TEXT */),
                   _hoisted_69,
@@ -5988,7 +5988,7 @@ return function render(_ctx, _cache) {
       const toQA = () => act(() => E.sendToQA(asset.value.id), '已送入质检');
       // 同步旋转
       let L = null, R = null; const onL = (v) => { L = v; link(); }, onR = (v) => { R = v; link(); };
-      function link() { if (!L || !R) return; let lock = false; const cp = (a, b) => { if (lock) return; lock = true; b.camera.position.copy(a.camera.position); b.controls.target.copy(a.controls.target); b.camera.updateMatrixWorld(); lock = false; }; L.controls.addEventListener('change', () => cp(L, R)); R.controls.addEventListener('change', () => cp(R, L)); }
+      function link() { if (!L || !R) return; let lock = false; const cp = (a, b) => { if (lock || !a.home || !b.home) return; lock = true; const ratio = b.home.size / a.home.size; b.controls.target.copy(a.controls.target).sub(a.home.t).multiplyScalar(ratio).add(b.home.t); b.camera.position.copy(a.camera.position).sub(a.controls.target).multiplyScalar(ratio).add(b.controls.target); b.camera.updateMatrixWorld(); lock = false; }; L.controls.addEventListener('change', () => cp(L, R)); R.controls.addEventListener('change', () => cp(R, L)); }
       return { list, selId, batch, asset, ver, preset, manual, wire, custom, P_, rawInfo, optInfo, task, steps, stepState, rows, canEdit, run, sameBatch, toQA, onL, onR, E, D, U, st };
     },
     render: (function () { const { renderList: _renderList, Fragment: _Fragment, openBlock: _openBlock, createElementBlock: _createElementBlock, toDisplayString: _toDisplayString, vModelSelect: _vModelSelect, createElementVNode: _createElementVNode, withDirectives: _withDirectives, resolveComponent: _resolveComponent, withCtx: _withCtx, createVNode: _createVNode, createCommentVNode: _createCommentVNode, createTextVNode: _createTextVNode, normalizeClass: _normalizeClass, vModelText: _vModelText } = Vue
@@ -10647,7 +10647,7 @@ return function render(_ctx, _cache) {
               ]),
               _createElementVNode("div", null, [
                 _hoisted_53,
-                _createElementVNode("b", _hoisted_54, _toDisplayString(_ctx.g.power||0) + "W", 1 /* TEXT */)
+                _createElementVNode("b", _hoisted_54, _toDisplayString(_ctx.g.power==null?'—':_ctx.g.power+'W'), 1 /* TEXT */)
               ]),
               _createElementVNode("div", null, [
                 _hoisted_55,

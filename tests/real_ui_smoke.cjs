@@ -5,7 +5,8 @@ const crypto = require('crypto');
 const assert = require('assert/strict');
 const { chromium } = require(process.env.SCW_PLAYWRIGHT_MODULE || 'playwright');
 const base = process.env.SCW_UI_BASE || 'http://127.0.0.1:8782';
-const output = path.resolve('test-results/real-ui');
+const output = path.resolve(process.env.SCW_UI_OUTPUT_DIR || 'test-results/real-ui');
+const workspace=process.env.SCW_UI_WORKSPACE || 'real-test';
 fs.mkdirSync(output, { recursive: true });
 (async () => {
   const browser = await chromium.launch({ executablePath: process.env.SCW_CHROMIUM || undefined, headless: true, args: ['--use-gl=swiftshader', '--enable-unsafe-swiftshader'] });
@@ -18,13 +19,13 @@ fs.mkdirSync(output, { recursive: true });
     await page.goto(base);
     await page.click('.role-pick button:nth-child(4)');
     await page.fill('#pw', process.env.SCW_UI_PASSWORD || 'demo-2026');
-    await page.fill('#ws', 'real-test');
+    await page.fill('#ws', workspace);
     await page.click('#login-btn');
     await page.waitForSelector('.shell');
     const asset = await page.evaluate(() => {
       const a = Engine.S.assets[0]; return { ...a, current: Engine.cur(a) };
     });
-    assert.match(asset.current.aigc_mark.model, /TEST FIXTURE/);
+    assert.match(asset.current.aigc_mark.model, new RegExp(process.env.SCW_UI_EXPECT_MODEL || 'TEST FIXTURE'));
     await page.evaluate(() => {
       window.__realLoads = [];
       const original = THREE.GLTFLoader.prototype.load;
@@ -64,7 +65,7 @@ fs.mkdirSync(output, { recursive: true });
     assert.equal(crypto.createHash('sha256').update(compressed).digest('hex'),manifest.assets[0].sha256);
     assert.equal(await page.locator('.toast.err').count(), 0);
     assert.deepEqual(errors, []);
-    const report = { fixture: true, inferenceTested: false, realLoads: await page.evaluate(() => window.__realLoads), downloadedBytes: bytes.length, sha256Matched: true, zipAssetHashMatched:true,materialModes: 6, errors };
+    const report = { fixture: !process.env.SCW_UI_EXPECT_MODEL, inferenceTested: false, workspace, realLoads: await page.evaluate(() => window.__realLoads), downloadedBytes: bytes.length, sha256Matched: true, zipAssetHashMatched:true,materialModes: 6, errors };
     fs.writeFileSync(path.join(output, 'report.json'), JSON.stringify(report, null, 2));
     console.log(JSON.stringify(report));
   } finally { await browser.close(); }

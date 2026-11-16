@@ -6,7 +6,7 @@
 14 个页面全部可操作，PRD 第二部分的业务规则与 SPEC 的调度、状态机、质检、导出规格按文档实现；
 模型推理（Qwen-Image、TRELLIS.2、3DGS 训练等）由**确定性模拟**代替，便于没有 GPU 的环境对外演示。
 
-本分支新增 **V1.0 真实道具模式**：上传真实文件、ComfyUI/TRELLIS.2 执行适配、Blender 加工、文件质检、审核入库及 Draco/KTX2 交付。启动和限制见 [真实模式说明](ops/production/README.md)。当前已通过 CPU 文件链路验收；完整权重和受限模型访问未齐备，GPU 端到端验收尚未通过。以下功能表和演示说明仍描述默认 demo 模式。
+本分支新增 **V1.0 真实道具模式**：上传真实文件、ComfyUI/TRELLIS.2 执行适配、Blender 加工、文件质检、审核入库及 Draco/KTX2 交付。启动和限制见 [真实模式说明](ops/production/README.md)。全部推理权重已下载并校验，RTX 4090 已跑通单件真实闭环：Qwen 概念图 → BiRefNet → TRELLIS.2 → 优化 → Q01–Q09 → 审核 → 压缩交付。结果见 [验收记录](reports/v1-real-prop-acceptance-2026-11-16.md)。百件压测、头显验证和正式生产运维仍未完成。以下功能表和演示说明仍描述默认 demo 模式。
 
 ## 页面
 

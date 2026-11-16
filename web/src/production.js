@@ -176,7 +176,7 @@
     } else if (t.node === 'image_to_3d') {
       const c = E.S.concepts.find(c => c.id === t.concept_id);
       let a = t.asset_id && E.asset(t.asset_id);
-      if (!a) { a = { id: uid('a'), code: 'SC-' + E.S.seq, name: (E.job(t.job_id).title || '道具') + ' ' + E.S.seq, project_id: t.project_id || E.job(t.job_id).project_id, job_id: t.job_id, type: 'prop', source: '生成', heritage: false, ai_restore: true, category: 'vase', prompt: c.prompt, concept_id: c.id, versions: [], tags: [], scenes: [], history: [], rework_count: 0, created_at: Date.now(), preset: E.job(t.job_id).preset }; E.S.assets.unshift(a); t.asset_id = a.id; }
+      if (!a) { a = { id: uid('a'), code: 'SC-' + E.S.seq, name: (E.job(t.job_id).title || '道具') + ' ' + E.S.seq, project_id: t.project_id || E.job(t.job_id).project_id, job_id: t.job_id, type: 'prop', source: '生成', heritage: false, ai_restore: !!E.job(t.job_id).ai_restore, category: 'vase', prompt: c.prompt, concept_id: c.id, versions: [], tags: [], scenes: [], history: [], rework_count: 0, created_at: Date.now(), preset: E.job(t.job_id).preset }; E.S.assets.unshift(a); t.asset_id = a.id; }
       const chain = (c.license_chain || []).concat([{ stage: '3D 生成', model_id: t.model_id, model_name: E.model(t.model_id).name, license: E.model(t.model_id).license_type }], ['dinov3','bria-rmbg2'].map(id => ({ stage: '3D 模型依赖', model_id: id, model_name: E.model(id).name, license: E.model(id).license_type })));
       const v = version(a, Object.assign({ stage: 'raw', raw: out.stats, opt: null, seed: t.params.seed, params: t.params, model_id: t.model_id, parent_task_id: tid, category: 'vase', license_chain: chain, aigc_mark: out.aigc_mark, defects: {}, qa_id: null }, out.file));
       a.status = 'generated'; a.model_id = t.model_id;
@@ -187,7 +187,7 @@
       const v = version(a, Object.assign({}, base, { stage: 'optimized', raw: base.raw, raw_file_id: base.raw_file_id || base.file_id, opt: out.stats, preset: out.stats.preset, approved: false, qa_id: null, blend_file_id: out.blend_file_id, license_chain: base.license_chain, params: base.params }, out.file));
       // version() owns identity even when copying an old version.
       if (t.params.manual) { a.status = 'manual'; a.manual_note = '请下载真实高模、低模和 .blend，人工处理后上传 GLB'; }
-      else { a.status = 'qa'; E.enqueue({ project_id: a.project_id, job_id: a.job_id, node: 'auto_qa', model_id: 'blender', queue: 'cpu', asset_id: a.id, version_id: v.id, params: {} }); }
+      else { a.status = 'qa'; delete a.manual_note; E.enqueue({ project_id: a.project_id, job_id: a.job_id, node: 'auto_qa', model_id: 'blender', queue: 'cpu', asset_id: a.id, version_id: v.id, params: {} }); }
     } else if (t.node === 'auto_qa') {
       const a = E.asset(t.asset_id), v = E.version(t.version_id); qa(a, v, out);
     } else if (t.node === 'export') {
