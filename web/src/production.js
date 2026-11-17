@@ -61,7 +61,10 @@
   });
   function freeAsset(aid) { if (E.S.tasks.some(t => t.asset_id === aid && ['queued','running','paused'].includes(t.status))) reject('该资产已有任务，请先完成或取消'); }
   wrap('regenerate3d', aid => freeAsset(aid));
-  wrap('optimize', ids => ids.forEach(freeAsset));
+  wrap('optimize', (ids, options) => {
+    ids.forEach(freeAsset);
+    if (!options || !E.S.settings.presets[options.preset]) reject('请选择有效的质量档位');
+  });
   wrap('rollback', (aid, vid) => { freeAsset(aid); if (E.version(vid)?.asset_id !== aid) reject('版本不属于当前资产'); });
   const oldTaskAction=E.taskAction;
   E.taskAction=function(tid,action){
@@ -185,6 +188,8 @@
       const a = E.asset(t.asset_id), base = E.version(t.version_id);
       out.stats.preset = t.params.preset || base.preset || a.preset;
       const v = version(a, Object.assign({}, base, { stage: 'optimized', raw: base.raw, raw_file_id: base.raw_file_id || base.file_id, opt: out.stats, preset: out.stats.preset, approved: false, qa_id: null, blend_file_id: out.blend_file_id, license_chain: base.license_chain, params: base.params }, out.file));
+      v.purpose = v.preset === 'hero' ? 'hero' : 'delivery';
+      a.renditions = a.renditions || {}; a.renditions[v.preset] = v.id;
       // version() owns identity even when copying an old version.
       if (t.params.manual) { a.status = 'manual'; a.manual_note = '请下载真实高模、低模和 .blend，人工处理后上传 GLB'; }
       else { a.status = 'qa'; delete a.manual_note; E.enqueue({ project_id: a.project_id, job_id: a.job_id, node: 'auto_qa', model_id: 'blender', queue: 'cpu', asset_id: a.id, version_id: v.id, params: {} }); }

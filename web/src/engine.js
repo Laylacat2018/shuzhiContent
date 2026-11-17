@@ -86,6 +86,7 @@
       pico4: { name: 'PICO 4 道具', tris: 20000, tex: 1024, materials: 1, size_mb: 5, scene_tris: 1500000, drawcalls: 200, tex_mem_mb: 512, scene_materials: 64, src: '平台默认（参照 Quest 3）' },
       quest2: { name: 'Quest 2 / 低端一体机', tris: 10000, tex: 1024, materials: 1, size_mb: 4, scene_tris: 750000, drawcalls: 100, tex_mem_mb: 256, scene_materials: 32, src: '场景级：Meta 文档；单件：平台默认' },
       webxr: { name: 'WebXR 道具', tris: 10000, tex: 1024, materials: 1, size_mb: 3, scene_tris: 750000, drawcalls: 100, tex_mem_mb: 256, scene_materials: 32, src: '平台默认（Draco + KTX2）' },
+      hero: { name: '精细展示母版', tris: 60000, tex: 2048, materials: 3, size_mb: 30, scene_tris: 6000000, drawcalls: 1000, tex_mem_mb: 4096, scene_materials: 256, src: '展示母版预算，非移动端性能承诺' },
       xr_space: { name: 'XR 大空间（PC 串流）', tris: 100000, tex: 2048, materials: 3, size_mb: 30, scene_tris: 6000000, drawcalls: 1000, tex_mem_mb: 4096, scene_materials: 256, src: '平台默认' },
       dome: { name: '球幕', tris: 100000, tex: 2048, materials: 3, size_mb: 30, scene_tris: 6000000, drawcalls: 1000, tex_mem_mb: 4096, scene_materials: 256, src: '平台默认' },
       custom: { name: '自定义', tris: 30000, tex: 2048, materials: 2, size_mb: 10, scene_tris: 1500000, drawcalls: 200, tex_mem_mb: 512, scene_materials: 64, src: '用户自定义' },
@@ -1247,9 +1248,14 @@
     step = step || 5; const S = E.S;
     for (let s = 0; s < simSec; s += step) advance(step, step / S.speed * 1000);
   };
+  E.ensureQualityProfiles = function (state) {
+    state.settings.presets.hero = state.settings.presets.hero || seedPresets().hero;
+    return state;
+  };
   E.init = function (opts) {
     opts = opts || {};
     if (opts.fresh || !E.load()) { E.S = freshState(); if (!opts.empty) seedDemo(); E.save(); }
+    E.ensureQualityProfiles(E.S);
     E.S.clock = Math.max(E.S.clock, Date.now());
     return E;
   };

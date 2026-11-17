@@ -5,6 +5,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=optional
 COPY web ./web
+COPY VERSION ./
 RUN apk add --no-cache python3 && python3 web/build.py
 
 # 运行阶段：FastAPI + Uvicorn
@@ -14,6 +15,7 @@ COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 COPY VERSION ./
 COPY server ./server
+COPY showcase ./showcase
 COPY --from=web /app/dist ./dist
 ENV SCW_DATA=/data
 VOLUME ["/data"]

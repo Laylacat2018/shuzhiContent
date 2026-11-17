@@ -1,0 +1,62 @@
+{
+  "version": "1.1.0",
+  "prd_version": "1.1",
+  "sample": "蓝釉花瓶",
+  "sample_kind": "actual_artifact",
+  "pipeline": "AI概念参考 + TRELLIS轮廓 + 程序化陶瓷精修",
+  "commercial_clearance": "待核对",
+  "device_tested": false,
+  "variants": [
+    {
+      "id": "hero",
+      "name": "精细展示母版",
+      "triangles": 50432,
+      "texture": 2048,
+      "url": "/showcase/assets/hero.glb"
+    },
+    {
+      "id": "webxr",
+      "name": "WebXR交付版",
+      "triangles": 9446,
+      "texture": 1024,
+      "url": "/showcase/assets/webxr.glb"
+    }
+  ],
+  "files": [
+    {
+      "name": "concept.png",
+      "bytes": 657578,
+      "sha256": "4e8c3d1e6e5afa4e013117b51bf23608f70d49cf773862dab6341878aa21dd53"
+    },
+    {
+      "name": "front.png",
+      "bytes": 1242499,
+      "sha256": "0fcf5413c941c774a163ac0d9348f68799fa5af60bac9004905a42abf47260bd"
+    },
+    {
+      "name": "hero.glb",
+      "bytes": 5028564,
+      "sha256": "d4d5463b4e8cc0ae55e39fe97109395dcf7c1815faca205e7c234e9a54bbe899"
+    },
+    {
+      "name": "mouth.png",
+      "bytes": 1229872,
+      "sha256": "93a6985935f9dbf7f25f9804f01fc99740cd0304338baee06d74bb2a05e257b2"
+    },
+    {
+      "name": "quality.json",
+      "bytes": 2087,
+      "sha256": "426abbd1c2d7a241751a11dde0bc7e3dfe92a07c04a92070d29af5ddca858ecd"
+    },
+    {
+      "name": "side.png",
+      "bytes": 1242411,
+      "sha256": "6bded8f5eeafff37320306fd69a3a03a73ecb092e8f5c1c054512b73782509d0"
+    },
+    {
+      "name": "webxr.glb",
+      "bytes": 3568340,
+      "sha256": "b9d529ec5cc42892baa80950e3c0b5137acb850266745ea83ffcc5818d94f4f0"
+    }
+  ]
+}

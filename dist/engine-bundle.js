@@ -699,6 +699,7 @@
       pico4: { name: 'PICO 4 道具', tris: 20000, tex: 1024, materials: 1, size_mb: 5, scene_tris: 1500000, drawcalls: 200, tex_mem_mb: 512, scene_materials: 64, src: '平台默认（参照 Quest 3）' },
       quest2: { name: 'Quest 2 / 低端一体机', tris: 10000, tex: 1024, materials: 1, size_mb: 4, scene_tris: 750000, drawcalls: 100, tex_mem_mb: 256, scene_materials: 32, src: '场景级：Meta 文档；单件：平台默认' },
       webxr: { name: 'WebXR 道具', tris: 10000, tex: 1024, materials: 1, size_mb: 3, scene_tris: 750000, drawcalls: 100, tex_mem_mb: 256, scene_materials: 32, src: '平台默认（Draco + KTX2）' },
+      hero: { name: '精细展示母版', tris: 60000, tex: 2048, materials: 3, size_mb: 30, scene_tris: 6000000, drawcalls: 1000, tex_mem_mb: 4096, scene_materials: 256, src: '展示母版预算，非移动端性能承诺' },
       xr_space: { name: 'XR 大空间（PC 串流）', tris: 100000, tex: 2048, materials: 3, size_mb: 30, scene_tris: 6000000, drawcalls: 1000, tex_mem_mb: 4096, scene_materials: 256, src: '平台默认' },
       dome: { name: '球幕', tris: 100000, tex: 2048, materials: 3, size_mb: 30, scene_tris: 6000000, drawcalls: 1000, tex_mem_mb: 4096, scene_materials: 256, src: '平台默认' },
       custom: { name: '自定义', tris: 30000, tex: 2048, materials: 2, size_mb: 10, scene_tris: 1500000, drawcalls: 200, tex_mem_mb: 512, scene_materials: 64, src: '用户自定义' },
@@ -1860,9 +1861,14 @@
     step = step || 5; const S = E.S;
     for (let s = 0; s < simSec; s += step) advance(step, step / S.speed * 1000);
   };
+  E.ensureQualityProfiles = function (state) {
+    state.settings.presets.hero = state.settings.presets.hero || seedPresets().hero;
+    return state;
+  };
   E.init = function (opts) {
     opts = opts || {};
     if (opts.fresh || !E.load()) { E.S = freshState(); if (!opts.empty) seedDemo(); E.save(); }
+    E.ensureQualityProfiles(E.S);
     E.S.clock = Math.max(E.S.clock, Date.now());
     return E;
   };
@@ -1995,7 +2001,10 @@
   });
   function freeAsset(aid) { if (E.S.tasks.some(t => t.asset_id === aid && ['queued','running','paused'].includes(t.status))) reject('该资产已有任务，请先完成或取消'); }
   wrap('regenerate3d', aid => freeAsset(aid));
-  wrap('optimize', ids => ids.forEach(freeAsset));
+  wrap('optimize', (ids, options) => {
+    ids.forEach(freeAsset);
+    if (!options || !E.S.settings.presets[options.preset]) reject('请选择有效的质量档位');
+  });
   wrap('rollback', (aid, vid) => { freeAsset(aid); if (E.version(vid)?.asset_id !== aid) reject('版本不属于当前资产'); });
   const oldTaskAction=E.taskAction;
   E.taskAction=function(tid,action){
@@ -2119,6 +2128,8 @@
       const a = E.asset(t.asset_id), base = E.version(t.version_id);
       out.stats.preset = t.params.preset || base.preset || a.preset;
       const v = version(a, Object.assign({}, base, { stage: 'optimized', raw: base.raw, raw_file_id: base.raw_file_id || base.file_id, opt: out.stats, preset: out.stats.preset, approved: false, qa_id: null, blend_file_id: out.blend_file_id, license_chain: base.license_chain, params: base.params }, out.file));
+      v.purpose = v.preset === 'hero' ? 'hero' : 'delivery';
+      a.renditions = a.renditions || {}; a.renditions[v.preset] = v.id;
       // version() owns identity even when copying an old version.
       if (t.params.manual) { a.status = 'manual'; a.manual_note = '请下载真实高模、低模和 .blend，人工处理后上传 GLB'; }
       else { a.status = 'qa'; delete a.manual_note; E.enqueue({ project_id: a.project_id, job_id: a.job_id, node: 'auto_qa', model_id: 'blender', queue: 'cpu', asset_id: a.id, version_id: v.id, params: {} }); }

@@ -1,6 +1,6 @@
 {
   "name": "spatial-content-works",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "空间内容工场 · AIGC 沉浸式空间内容生产管线平台（演示版）",
   "scripts": {
     "build": "python3 web/build.py",

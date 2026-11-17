@@ -206,13 +206,14 @@
       const switchProject = (pid) => { if (SERVER) { net.pid = pid; persistNet(); } E.S.currentProjectId = pid; st.rev++; E.save(); toast('已切换项目：' + E.project().name); };
       const logout = () => { if(SERVER)fetch('/api/v1/auth/logout',{method:'POST'}).catch(()=>{}); st.logged = false; net.token = ''; net.password = ''; persistNet(); try { sessionStorage.removeItem('scw.logged'); } catch (e) { } };
       const theme = () => { const cur = document.documentElement.getAttribute('data-theme'); const dark = cur ? cur === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches; document.documentElement.setAttribute('data-theme', dark ? 'light' : 'dark'); };
-      return { st, E, D, NAV, pageComp, item, top, alerts, locked, role, go, switchUser, switchProject, logout, theme, U };
+      return { st, E, D, NAV, pageComp, item, top, alerts, locked, role, go, switchUser, switchProject, logout, theme, U, SERVER };
     },
     template: `
     <div class="shell" :data-r="st.rev">
       <header class="topbar">
         <div class="brand"><div class="brand-mark"></div><div>空间内容工场<br><small>AIGC SPATIAL CONTENT WORKS</small></div></div>
         <div class="top-stats">
+          <span class="chip">{{ st.production ? '真实生产' : '流程演示' }}</span>
           <select class="inp" style="width:auto;max-width:240px" :value="E.S.currentProjectId" @change="switchProject($event.target.value)" aria-label="当前项目" id="project-switch">
             <option v-for="p in E.S.projects" :key="p.id" :value="p.id">{{ p.name }} · {{ D.SCOPES[p.usage_scope] }}</option>
           </select>
@@ -222,6 +223,7 @@
           <button class="chip" style="cursor:pointer" @click="go('workbench')">提醒 <b class="num" :style="{color: alerts ? 'var(--err)' : ''}">{{ alerts }}</b></button>
         </div>
         <div class="top-right">
+          <a v-if="SERVER" class="btn sm" href="/showcase" target="_blank" rel="noopener">真实成果</a>
           <select class="inp" style="width:auto" :disabled="st.production" :value="E.S.currentUserId" @change="switchUser($event.target.value)" aria-label="切换账号" id="user-switch">
             <option v-for="u in E.S.users" :key="u.id" :value="u.id">{{ u.name }} · {{ D.ROLES[u.role] }}</option>
           </select>
@@ -261,12 +263,13 @@
     },
     template: `<div class="login">
       <div class="art"><canvas ref="canvas" aria-hidden="true"></canvas>
-        <span class="tag ver" style="align-self:flex-start;background:rgba(0,0,0,.3)">V1.0 · 道具资产闭环 / V1.1 / V1.2</span>
+        <span class="tag ver" style="align-self:flex-start;background:rgba(0,0,0,.3)">v1.1 · 真实道具与精细展示</span>
         <h1>空间内容工场</h1>
         <p>面向文旅与沉浸式项目团队的本地化 AIGC 空间内容生产平台：需求单 → 概念图 → 3D 资产 → 优化 → 质检 → 入库 → 组装 → 导出。单张 RTX 4090 自动排程，许可证、文博准确性与 AIGC 标识贯穿全流程。</p>
       </div>
       <form class="form" @submit.prevent="enter">
         <h2 style="font-family:var(--f-display);font-size:22px">登录</h2>
+        <a v-if="SERVER" class="btn" href="/showcase" style="margin-bottom:12px">查看真实成果与版本对比</a>
         <div class="note">{{ st.production ? '真实生产环境：请选择账号，输入管理员提供的该账号密码。' : SERVER ? '选择账号登录（演示密码 demo-2026，可由管理员通过环境变量修改）。登录后可在右上角切换账号，体验不同角色的权限。' : '演示环境：选择一个角色登录，可随时在右上角切换账号，体验不同角色的权限。' }}</div>
         <div class="role-pick">
           <button type="button" v-for="u in E.S.users" :key="u.id" :class="{on: uid===u.id}" @click="uid=u.id"><b>{{ u.name }}</b><span>{{ D.ROLES[u.role] }}</span></button>

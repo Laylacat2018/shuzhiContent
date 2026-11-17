@@ -171,7 +171,7 @@ def healthz() -> dict:
 def info() -> dict:
     return {"name": "空间内容工场 Spatial Content Works", "version": VERSION, "mode": "server", "engine": "server-v8", "pages": 14,
             "workspace": DEFAULT_WS, "execution_mode": "production" if H().production else "demo", "users": [{"id": k, **v} for k, v in auth.USERS.items()],
-            "note": "真实生产模式：模型与加工由 Worker 执行。" if H().production else "模型推理由确定性模拟代替；业务规则、状态与权限由服务端统一执行。"}
+            "note": "真实生产模式：模型与加工由 Worker 执行。" if H().production else "流程演示使用模拟任务；/showcase 展示已验证的真实文件，实时 GPU 生产需连接生产节点。"}
 
 
 class LoginIn(BaseModel):
@@ -576,3 +576,19 @@ def standalone() -> FileResponse:
 @app.get("/")
 def index() -> FileResponse:
     return FileResponse(DIST / "index.html", media_type="text/html; charset=utf-8")
+
+
+SHOWCASE = ROOT / 'showcase'
+if (SHOWCASE / 'assets').is_dir():
+    app.mount('/showcase/assets', StaticFiles(directory=SHOWCASE / 'assets'), name='showcase-assets')
+
+
+@app.get('/showcase')
+def showcase_page() -> FileResponse:
+    """Explicitly published samples only; never mounts private workspace storage."""
+    return FileResponse(SHOWCASE / 'index.html', media_type='text/html; charset=utf-8')
+
+
+@app.get('/showcase/catalog')
+def showcase_catalog() -> dict:
+    return json.loads((SHOWCASE / 'catalog.json').read_text('utf-8'))

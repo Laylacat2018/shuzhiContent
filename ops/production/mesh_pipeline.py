@@ -227,6 +227,9 @@ def main(request):
         high = None
         if operation == 'optimize':
             high = low.copy(); high.data = low.data.copy(); bpy.context.collection.objects.link(high); high.name='SourceHigh'
+            # Repair small holes before voxel rebuilding. An almost-closed thin
+            # sheet can otherwise become a doubled shell and stall QuadriFlow.
+            clean_surface(low)
             bm=bmesh.new();bm.from_mesh(low.data)
             bmesh.ops.remove_doubles(bm,verts=list(bm.verts),dist=.00001)
             bmesh.ops.recalc_face_normals(bm,faces=list(bm.faces))
@@ -264,7 +267,7 @@ def main(request):
             bmesh.ops.recalc_face_normals(bm,faces=list(bm.faces));bm.to_mesh(low.data);bm.free();low.data.update()
             before=topology_signature(low.data)
             try:
-                result=bpy.ops.object.quadriflow_remesh(target_faces=max(100,target//2),use_mesh_symmetry=False,use_preserve_sharp=True,use_preserve_boundary=True)
+                result=bpy.ops.object.quadriflow_remesh(target_faces=max(100,target//2),seed=1,use_mesh_symmetry=False,use_preserve_sharp=True,use_preserve_boundary=True)
                 if 'FINISHED' not in result or topology_signature(low.data)==before:raise RuntimeError('QuadriFlow 未生成新拓扑')
             except RuntimeError as e:
                 raise RuntimeError('自动重拓扑失败，请转人工处理：'+str(e)) from e

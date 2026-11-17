@@ -37,6 +37,7 @@ function hostLoad(id, json) {
   S.gpu.loaded = null; S.gpu.swapping = null; S.gpu.viewportOpen = false;
   S.cloudNodes.forEach(function (c) { if (c.state !== 'off') { c.state = 'booting'; c.boot = 60; c.task = null; } });
   S.clock = Math.max(S.clock, Date.now());
+  Engine.ensureQualityProfiles(S);
   (S.scenes || []).forEach(function (sc) { sc.agentQueue = sc.agentQueue || []; });
   HOST.ws[id] = S; bump(id);
   return n;

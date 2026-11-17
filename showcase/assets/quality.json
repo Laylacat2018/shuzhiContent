@@ -1,0 +1,158 @@
+{
+  "provenance": {
+    "label": "AI 参考 · 程序化精修",
+    "generated": true,
+    "model": "Qwen-Image + TRELLIS.2 silhouette + procedural ceramic refinement",
+    "reference_asset": "SC-134 raw",
+    "refinement": "hollow lathe geometry, authored glaze, real AO bake",
+    "display_height_m": 0.3,
+    "dimensions_measured": false,
+    "time": "2026-11-17"
+  },
+  "stats": {
+    "tris": 50432,
+    "verts": 25218,
+    "materials": 1,
+    "texture": 2048,
+    "textures": {
+      "basecolor.png": [
+        2048,
+        2048
+      ],
+      "roughness.png": [
+        2048,
+        2048
+      ],
+      "normal.png": [
+        2048,
+        2048
+      ],
+      "Ceramic_AO_1K": [
+        1024,
+        1024
+      ]
+    },
+    "file_mb": 4.796,
+    "nonmanifold": 0,
+    "flipped": 0,
+    "uvOverlap": 0.0,
+    "missing_uv": false,
+    "size_m": [
+      0.2706,
+      0.2985,
+      0.2706
+    ],
+    "origin_offset_m": 0.000795,
+    "pbr": true,
+    "normal_detail": "需目检",
+    "measurements": "Blender actual file"
+  },
+  "texture_sizes": {
+    "basecolor": 2048,
+    "roughness": 2048,
+    "normal": 2048,
+    "AO": 1024
+  },
+  "reference_profile": [
+    [
+      0.262,
+      0.02
+    ],
+    [
+      0.3,
+      0.06
+    ],
+    [
+      0.348,
+      0.1
+    ],
+    [
+      0.381,
+      0.14
+    ],
+    [
+      0.407,
+      0.18
+    ],
+    [
+      0.425,
+      0.22
+    ],
+    [
+      0.438,
+      0.26
+    ],
+    [
+      0.445,
+      0.3
+    ],
+    [
+      0.45,
+      0.34
+    ],
+    [
+      0.451,
+      0.38
+    ],
+    [
+      0.449,
+      0.42
+    ],
+    [
+      0.443,
+      0.46
+    ],
+    [
+      0.431,
+      0.5
+    ],
+    [
+      0.415,
+      0.54
+    ],
+    [
+      0.393,
+      0.58
+    ],
+    [
+      0.366,
+      0.62
+    ],
+    [
+      0.326,
+      0.66
+    ],
+    [
+      0.276,
+      0.7
+    ],
+    [
+      0.219,
+      0.74
+    ],
+    [
+      0.169,
+      0.78
+    ],
+    [
+      0.137,
+      0.82
+    ],
+    [
+      0.124,
+      0.86
+    ],
+    [
+      0.12,
+      0.9
+    ],
+    [
+      0.148,
+      0.94
+    ],
+    [
+      0.188,
+      0.98
+    ]
+  ]
+}

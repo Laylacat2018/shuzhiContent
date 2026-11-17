@@ -1,14 +1,15 @@
 services:
   web:
     build: .
-    image: spatial-content-works:1.0.0
+    image: spatial-content-works:1.1.0
     restart: unless-stopped
     ports:
       - "8000:8000"
     environment:
       # 正式部署请修改：登录密码与 JWT 签名密钥
-      SCW_DEMO_PASSWORD: "demo-2026"
-      SCW_JWT_SECRET: "change-me-to-a-long-random-string"
+      SCW_MODE: "demo"
+      SCW_DEMO_PASSWORD: "${SCW_DEMO_PASSWORD:?Set the demo login password in a private env file}"
+      SCW_JWT_SECRET: "${SCW_JWT_SECRET:?Set the JWT secret in a private env file}"
       SCW_WORKSPACE: "default"
     volumes:
       - scw-data:/data        # 工作区数据，重启 / 升级后保留

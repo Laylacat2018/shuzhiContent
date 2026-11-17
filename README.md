@@ -1,12 +1,10 @@
 # 空间内容工场 · AIGC 沉浸式空间内容生产管线平台
 
-当前版本：**v1.0.0**（2026-11-15，见 [CHANGELOG.md](CHANGELOG.md)）。版本号以仓库根目录 `VERSION` 文件为准；页面中的 V1.0 / V1.1 / V1.2 指 PRD 的功能范围，与发布版本号无关。
+当前版本：**v1.1.0**（2026-11-17，见 [CHANGELOG.md](CHANGELOG.md)）。版本号以仓库根目录 `VERSION` 文件为准；页面中的 V1.0 / V1.1 / V1.2 指 PRD 的功能范围，与发布版本号无关。
 
-依据《02-AIGC 沉浸式空间内容生产管线平台 PRD · 页面原型 · SPEC》开发的**商务演示版**。
-14 个页面全部可操作，PRD 第二部分的业务规则与 SPEC 的调度、状态机、质检、导出规格按文档实现；
-模型推理（Qwen-Image、TRELLIS.2、3DGS 训练等）由**确定性模拟**代替，便于没有 GPU 的环境对外演示。
+基于原 PRD 原型 SPEC 和本次真实产出更新，[PRD v1.1](docs/PRD-v1.1.md) 与 Word 版本位于 docs。默认云端演示保留 14 页业务流程，并持续标记“流程演示”；独立的 `/showcase` 页面展示实际花瓶文件，支持原 WebXR 版和精细展示母版切换、旋转和下载。
 
-本分支新增 **V1.0 真实道具模式**：上传真实文件、ComfyUI/TRELLIS.2 执行适配、Blender 加工、文件质检、审核入库及 Draco/KTX2 交付。启动和限制见 [真实模式说明](ops/production/README.md)。全部推理权重已下载并校验，RTX 4090 已跑通单件真实闭环：Qwen 概念图 → BiRefNet → TRELLIS.2 → 优化 → Q01–Q09 → 审核 → 压缩交付。结果见 [验收记录](reports/v1-real-prop-acceptance-2026-11-16.md)。百件压测、头显验证和正式生产运维仍未完成。以下功能表和演示说明仍描述默认 demo 模式。
+另提供 **V1.0 真实道具生产模式**：上传真实文件、ComfyUI/TRELLIS.2 执行适配、Blender 加工、文件质检、审核入库及 Draco/KTX2 交付。启动和限制见 [真实模式说明](ops/production/README.md)。全部推理权重已下载并校验，RTX 4090 已跑通单件真实闭环：Qwen 概念图 → BiRefNet → TRELLIS.2 → 优化 → Q01–Q09 → 审核 → 压缩交付。结果见 [验收记录](reports/v1-real-prop-acceptance-2026-11-16.md)。百件压测、头显验证和正式生产运维仍未完成。以下功能表和演示说明仍描述默认 demo 模式。
 
 ## 页面
 

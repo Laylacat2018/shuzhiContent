@@ -374,8 +374,8 @@
             <tr v-for="r in rows" :key="r[0]"><td>{{ r[0] }}</td><td class="r">{{ r[1] }}</td><td class="r">{{ r[2] }}</td><td class="r">{{ r[3] }}</td><td><span v-if="r[4]===true" class="res-pass">通过</span><span v-else-if="r[4]===false" class="res-fail">超出</span><span v-else-if="r[4]==='eye'" class="res-warn">需目检</span><span v-else class="faint">—</span></td></tr></tbody></table></div></div>
         </div>
         <div class="stack">
-          <div class="panel"><header><h3>目标预设</h3><span class="sub">默认来自需求单目标平台</span></header><div class="body stack">
-            <div class="seg"><button v-for="k in ['quest3','webxr','xr_space','custom']" :key="k" :class="{on: preset===k}" @click="preset=k">{{ E.S.settings.presets[k].name }}</button></div>
+          <div class="panel"><header><h3>目标预设</h3><span class="sub">展示母版与终端交付分别保留</span></header><div class="body stack">
+            <div class="seg"><button v-for="k in ['hero','quest3','webxr','xr_space','custom']" :key="k" :class="{on: preset===k}" @click="preset=k">{{ E.S.settings.presets[k].name }}</button></div>
             <div v-if="preset==='custom'" class="grid g2"><div class="field"><label>三角形上限</label><input class="inp" type="number" v-model.number="custom.tris"></div><div class="field"><label>贴图上限</label><select class="inp" v-model.number="custom.tex"><option :value="512">512</option><option :value="1024">1024</option><option :value="2048">2048</option></select></div></div>
             <div class="kv small"><div>三角形</div><div>≤ {{ U.n(P_.tris) }}</div><div>贴图</div><div>≤ {{ P_.tex }} px</div><div>材质</div><div>{{ P_.materials }} 个</div><div>文件</div><div>≤ {{ P_.size_mb }} MB</div></div>
           </div></div>

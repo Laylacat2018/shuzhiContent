@@ -311,7 +311,7 @@ pre.code { font-family: var(--f-mono); font-size: 11.5px; background: var(--surf
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/DRACOLoader.js"></script>
 <div id="app"></div>
-<script>window.SCW_MODE = 'artifact'; window.SCW_VERSION = '1.0.0';</script>
+<script>window.SCW_MODE = 'artifact'; window.SCW_VERSION = '1.1.0';</script>
 <script>
 /* 空间内容工场 · 程序化几何 / 贴图 / GLB 写出
  * 演示版用确定性的程序化生成代替真实模型推理：同一 seed + 参数必然得到同一结果，
@@ -1014,6 +1014,7 @@ pre.code { font-family: var(--f-mono); font-size: 11.5px; background: var(--surf
       pico4: { name: 'PICO 4 道具', tris: 20000, tex: 1024, materials: 1, size_mb: 5, scene_tris: 1500000, drawcalls: 200, tex_mem_mb: 512, scene_materials: 64, src: '平台默认（参照 Quest 3）' },
       quest2: { name: 'Quest 2 / 低端一体机', tris: 10000, tex: 1024, materials: 1, size_mb: 4, scene_tris: 750000, drawcalls: 100, tex_mem_mb: 256, scene_materials: 32, src: '场景级：Meta 文档；单件：平台默认' },
       webxr: { name: 'WebXR 道具', tris: 10000, tex: 1024, materials: 1, size_mb: 3, scene_tris: 750000, drawcalls: 100, tex_mem_mb: 256, scene_materials: 32, src: '平台默认（Draco + KTX2）' },
+      hero: { name: '精细展示母版', tris: 60000, tex: 2048, materials: 3, size_mb: 30, scene_tris: 6000000, drawcalls: 1000, tex_mem_mb: 4096, scene_materials: 256, src: '展示母版预算，非移动端性能承诺' },
       xr_space: { name: 'XR 大空间（PC 串流）', tris: 100000, tex: 2048, materials: 3, size_mb: 30, scene_tris: 6000000, drawcalls: 1000, tex_mem_mb: 4096, scene_materials: 256, src: '平台默认' },
       dome: { name: '球幕', tris: 100000, tex: 2048, materials: 3, size_mb: 30, scene_tris: 6000000, drawcalls: 1000, tex_mem_mb: 4096, scene_materials: 256, src: '平台默认' },
       custom: { name: '自定义', tris: 30000, tex: 2048, materials: 2, size_mb: 10, scene_tris: 1500000, drawcalls: 200, tex_mem_mb: 512, scene_materials: 64, src: '用户自定义' },
@@ -2175,9 +2176,14 @@ pre.code { font-family: var(--f-mono); font-size: 11.5px; background: var(--surf
     step = step || 5; const S = E.S;
     for (let s = 0; s < simSec; s += step) advance(step, step / S.speed * 1000);
   };
+  E.ensureQualityProfiles = function (state) {
+    state.settings.presets.hero = state.settings.presets.hero || seedPresets().hero;
+    return state;
+  };
   E.init = function (opts) {
     opts = opts || {};
     if (opts.fresh || !E.load()) { E.S = freshState(); if (!opts.empty) seedDemo(); E.save(); }
+    E.ensureQualityProfiles(E.S);
     E.S.clock = Math.max(E.S.clock, Date.now());
     return E;
   };
@@ -2310,7 +2316,10 @@ pre.code { font-family: var(--f-mono); font-size: 11.5px; background: var(--surf
   });
   function freeAsset(aid) { if (E.S.tasks.some(t => t.asset_id === aid && ['queued','running','paused'].includes(t.status))) reject('该资产已有任务，请先完成或取消'); }
   wrap('regenerate3d', aid => freeAsset(aid));
-  wrap('optimize', ids => ids.forEach(freeAsset));
+  wrap('optimize', (ids, options) => {
+    ids.forEach(freeAsset);
+    if (!options || !E.S.settings.presets[options.preset]) reject('请选择有效的质量档位');
+  });
   wrap('rollback', (aid, vid) => { freeAsset(aid); if (E.version(vid)?.asset_id !== aid) reject('版本不属于当前资产'); });
   const oldTaskAction=E.taskAction;
   E.taskAction=function(tid,action){
@@ -2434,6 +2443,8 @@ pre.code { font-family: var(--f-mono); font-size: 11.5px; background: var(--surf
       const a = E.asset(t.asset_id), base = E.version(t.version_id);
       out.stats.preset = t.params.preset || base.preset || a.preset;
       const v = version(a, Object.assign({}, base, { stage: 'optimized', raw: base.raw, raw_file_id: base.raw_file_id || base.file_id, opt: out.stats, preset: out.stats.preset, approved: false, qa_id: null, blend_file_id: out.blend_file_id, license_chain: base.license_chain, params: base.params }, out.file));
+      v.purpose = v.preset === 'hero' ? 'hero' : 'delivery';
+      a.renditions = a.renditions || {}; a.renditions[v.preset] = v.id;
       // version() owns identity even when copying an old version.
       if (t.params.manual) { a.status = 'manual'; a.manual_note = '请下载真实高模、低模和 .blend，人工处理后上传 GLB'; }
       else { a.status = 'qa'; delete a.manual_note; E.enqueue({ project_id: a.project_id, job_id: a.job_id, node: 'auto_qa', model_id: 'blender', queue: 'cpu', asset_id: a.id, version_id: v.id, params: {} }); }
@@ -3321,9 +3332,9 @@ return function render(_ctx, _cache) {
       const switchProject = (pid) => { if (SERVER) { net.pid = pid; persistNet(); } E.S.currentProjectId = pid; st.rev++; E.save(); toast('已切换项目：' + E.project().name); };
       const logout = () => { if(SERVER)fetch('/api/v1/auth/logout',{method:'POST'}).catch(()=>{}); st.logged = false; net.token = ''; net.password = ''; persistNet(); try { sessionStorage.removeItem('scw.logged'); } catch (e) { } };
       const theme = () => { const cur = document.documentElement.getAttribute('data-theme'); const dark = cur ? cur === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches; document.documentElement.setAttribute('data-theme', dark ? 'light' : 'dark'); };
-      return { st, E, D, NAV, pageComp, item, top, alerts, locked, role, go, switchUser, switchProject, logout, theme, U };
+      return { st, E, D, NAV, pageComp, item, top, alerts, locked, role, go, switchUser, switchProject, logout, theme, U, SERVER };
     },
-    render: (function () { const { createElementVNode: _createElementVNode, createTextVNode: _createTextVNode, renderList: _renderList, Fragment: _Fragment, openBlock: _openBlock, createElementBlock: _createElementBlock, toDisplayString: _toDisplayString, normalizeStyle: _normalizeStyle, createCommentVNode: _createCommentVNode, vShow: _vShow, normalizeClass: _normalizeClass, withDirectives: _withDirectives, resolveComponent: _resolveComponent, createBlock: _createBlock, resolveDynamicComponent: _resolveDynamicComponent } = Vue
+    render: (function () { const { createElementVNode: _createElementVNode, createTextVNode: _createTextVNode, toDisplayString: _toDisplayString, renderList: _renderList, Fragment: _Fragment, openBlock: _openBlock, createElementBlock: _createElementBlock, normalizeStyle: _normalizeStyle, createCommentVNode: _createCommentVNode, vShow: _vShow, normalizeClass: _normalizeClass, withDirectives: _withDirectives, resolveComponent: _resolveComponent, createBlock: _createBlock, resolveDynamicComponent: _resolveDynamicComponent } = Vue
 
 const _hoisted_1 = ["data-r"]
 const _hoisted_2 = { class: "topbar" }
@@ -3336,45 +3347,53 @@ const _hoisted_3 = /*#__PURE__*/_createElementVNode("div", { class: "brand" }, [
   ])
 ], -1 /* HOISTED */)
 const _hoisted_4 = { class: "top-stats" }
-const _hoisted_5 = ["value"]
+const _hoisted_5 = { class: "chip" }
 const _hoisted_6 = ["value"]
-const _hoisted_7 = {
+const _hoisted_7 = ["value"]
+const _hoisted_8 = {
   class: "chip",
   title: "RTX 4090 24GB"
 }
-const _hoisted_8 = /*#__PURE__*/_createElementVNode("span", null, "GPU", -1 /* HOISTED */)
-const _hoisted_9 = { class: "vram-bar" }
-const _hoisted_10 = { class: "num" }
-const _hoisted_11 = { class: "chip hide-sm" }
-const _hoisted_12 = { class: "num" }
-const _hoisted_13 = { class: "top-right" }
-const _hoisted_14 = ["disabled", "value"]
-const _hoisted_15 = ["value"]
-const _hoisted_16 = {
+const _hoisted_9 = /*#__PURE__*/_createElementVNode("span", null, "GPU", -1 /* HOISTED */)
+const _hoisted_10 = { class: "vram-bar" }
+const _hoisted_11 = { class: "num" }
+const _hoisted_12 = { class: "chip hide-sm" }
+const _hoisted_13 = { class: "num" }
+const _hoisted_14 = { class: "top-right" }
+const _hoisted_15 = {
+  key: 0,
+  class: "btn sm",
+  href: "/showcase",
+  target: "_blank",
+  rel: "noopener"
+}
+const _hoisted_16 = ["disabled", "value"]
+const _hoisted_17 = ["value"]
+const _hoisted_18 = {
   class: "sidebar",
   "aria-label": "页面导航"
 }
-const _hoisted_17 = ["onClick", "data-route"]
-const _hoisted_18 = { class: "code" }
-const _hoisted_19 = {
+const _hoisted_19 = ["onClick", "data-route"]
+const _hoisted_20 = { class: "code" }
+const _hoisted_21 = {
   key: 0,
   class: "cnt"
 }
-const _hoisted_20 = {
+const _hoisted_22 = {
   key: 1,
   class: "ver"
 }
-const _hoisted_21 = { class: "main" }
-const _hoisted_22 = {
+const _hoisted_23 = { class: "main" }
+const _hoisted_24 = {
   key: 1,
   class: "page"
 }
-const _hoisted_23 = /*#__PURE__*/_createElementVNode("div", { class: "panel locked" }, [
+const _hoisted_25 = /*#__PURE__*/_createElementVNode("div", { class: "panel locked" }, [
   /*#__PURE__*/_createElementVNode("h3", null, "仅管理员可访问系统设置"),
   /*#__PURE__*/_createElementVNode("p", null, "请在右上角切换为管理员账号。")
 ], -1 /* HOISTED */)
-const _hoisted_24 = [
-  _hoisted_23
+const _hoisted_26 = [
+  _hoisted_25
 ]
 
 return function render(_ctx, _cache) {
@@ -3387,6 +3406,7 @@ return function render(_ctx, _cache) {
     _createElementVNode("header", _hoisted_2, [
       _hoisted_3,
       _createElementVNode("div", _hoisted_4, [
+        _createElementVNode("span", _hoisted_5, _toDisplayString(_ctx.st.production ? '真实生产' : '流程演示'), 1 /* TEXT */),
         _createElementVNode("select", {
           class: "inp",
           style: {"width":"auto","max-width":"240px"},
@@ -3399,19 +3419,19 @@ return function render(_ctx, _cache) {
             return (_openBlock(), _createElementBlock("option", {
               key: p.id,
               value: p.id
-            }, _toDisplayString(p.name) + " · " + _toDisplayString(_ctx.D.SCOPES[p.usage_scope]), 9 /* TEXT, PROPS */, _hoisted_6))
+            }, _toDisplayString(p.name) + " · " + _toDisplayString(_ctx.D.SCOPES[p.usage_scope]), 9 /* TEXT, PROPS */, _hoisted_7))
           }), 128 /* KEYED_FRAGMENT */))
-        ], 40 /* PROPS, NEED_HYDRATION */, _hoisted_5),
-        _createElementVNode("span", _hoisted_7, [
-          _hoisted_8,
-          _createElementVNode("span", _hoisted_9, [
+        ], 40 /* PROPS, NEED_HYDRATION */, _hoisted_6),
+        _createElementVNode("span", _hoisted_8, [
+          _hoisted_9,
+          _createElementVNode("span", _hoisted_10, [
             _createElementVNode("i", {
               style: _normalizeStyle({width: (_ctx.top.vram/24*100)+'%', background: _ctx.top.vram>22?'var(--err)':''})
             }, null, 4 /* STYLE */)
           ]),
-          _createElementVNode("b", _hoisted_10, _toDisplayString(_ctx.top.vram.toFixed(1)) + "/24GB", 1 /* TEXT */)
+          _createElementVNode("b", _hoisted_11, _toDisplayString(_ctx.top.vram.toFixed(1)) + "/24GB", 1 /* TEXT */)
         ]),
-        _createElementVNode("span", _hoisted_11, [
+        _createElementVNode("span", _hoisted_12, [
           _createTextVNode("已加载 "),
           _createElementVNode("b", null, _toDisplayString(_ctx.top.model), 1 /* TEXT */)
         ]),
@@ -3421,7 +3441,7 @@ return function render(_ctx, _cache) {
           onClick: _cache[1] || (_cache[1] = $event => (_ctx.go('queue')))
         }, [
           _createTextVNode("队列 "),
-          _createElementVNode("b", _hoisted_12, _toDisplayString(_ctx.top.queue), 1 /* TEXT */)
+          _createElementVNode("b", _hoisted_13, _toDisplayString(_ctx.top.queue), 1 /* TEXT */)
         ]),
         _createElementVNode("button", {
           class: "chip",
@@ -3435,7 +3455,10 @@ return function render(_ctx, _cache) {
           }, _toDisplayString(_ctx.alerts), 5 /* TEXT, STYLE */)
         ])
       ]),
-      _createElementVNode("div", _hoisted_13, [
+      _createElementVNode("div", _hoisted_14, [
+        (_ctx.SERVER)
+          ? (_openBlock(), _createElementBlock("a", _hoisted_15, "真实成果"))
+          : _createCommentVNode("v-if", true),
         _createElementVNode("select", {
           class: "inp",
           style: {"width":"auto"},
@@ -3449,9 +3472,9 @@ return function render(_ctx, _cache) {
             return (_openBlock(), _createElementBlock("option", {
               key: u.id,
               value: u.id
-            }, _toDisplayString(u.name) + " · " + _toDisplayString(_ctx.D.ROLES[u.role]), 9 /* TEXT, PROPS */, _hoisted_15))
+            }, _toDisplayString(u.name) + " · " + _toDisplayString(_ctx.D.ROLES[u.role]), 9 /* TEXT, PROPS */, _hoisted_17))
           }), 128 /* KEYED_FRAGMENT */))
-        ], 40 /* PROPS, NEED_HYDRATION */, _hoisted_14),
+        ], 40 /* PROPS, NEED_HYDRATION */, _hoisted_16),
         _createElementVNode("button", {
           class: "btn sm ghost",
           onClick: _cache[4] || (_cache[4] = (...args) => (_ctx.theme && _ctx.theme(...args))),
@@ -3463,7 +3486,7 @@ return function render(_ctx, _cache) {
         }, "退出")
       ])
     ]),
-    _createElementVNode("nav", _hoisted_16, [
+    _createElementVNode("nav", _hoisted_18, [
       (_openBlock(true), _createElementBlock(_Fragment, null, _renderList(_ctx.NAV, (g) => {
         return (_openBlock(), _createElementBlock("div", {
           class: "nav-group",
@@ -3477,19 +3500,19 @@ return function render(_ctx, _cache) {
               onClick: $event => (_ctx.go(it.r)),
               "data-route": it.r
             }, [
-              _createElementVNode("span", _hoisted_18, _toDisplayString(it.code), 1 /* TEXT */),
+              _createElementVNode("span", _hoisted_20, _toDisplayString(it.code), 1 /* TEXT */),
               _createTextVNode(_toDisplayString(it.name) + " ", 1 /* TEXT */),
               (it.r==='review' && _ctx.top.review)
-                ? (_openBlock(), _createElementBlock("span", _hoisted_19, _toDisplayString(_ctx.top.review), 1 /* TEXT */))
-                : (_openBlock(), _createElementBlock("span", _hoisted_20, _toDisplayString(it.ver), 1 /* TEXT */))
-            ], 10 /* CLASS, PROPS */, _hoisted_17)), [
+                ? (_openBlock(), _createElementBlock("span", _hoisted_21, _toDisplayString(_ctx.top.review), 1 /* TEXT */))
+                : (_openBlock(), _createElementBlock("span", _hoisted_22, _toDisplayString(it.ver), 1 /* TEXT */))
+            ], 10 /* CLASS, PROPS */, _hoisted_19)), [
               [_vShow, !it.admin || _ctx.role==='admin']
             ])
           }), 128 /* KEYED_FRAGMENT */))
         ]))
       }), 128 /* KEYED_FRAGMENT */))
     ]),
-    _createElementVNode("main", _hoisted_21, [
+    _createElementVNode("main", _hoisted_23, [
       (_ctx.locked)
         ? (_openBlock(), _createBlock(_component_c_locked, {
             key: 0,
@@ -3497,7 +3520,7 @@ return function render(_ctx, _cache) {
             style: {"margin":"18px"}
           }, null, 8 /* PROPS */, ["ver"]))
         : (_ctx.item.admin && _ctx.role!=='admin')
-          ? (_openBlock(), _createElementBlock("div", _hoisted_22, _hoisted_24))
+          ? (_openBlock(), _createElementBlock("div", _hoisted_24, _hoisted_26))
           : (_openBlock(), _createBlock(_resolveDynamicComponent(_ctx.pageComp), {
               key: _ctx.st.route
             }))
@@ -3519,7 +3542,7 @@ return function render(_ctx, _cache) {
       onUnmounted(() => cancelAnimationFrame(raf));
       return { uid, enter, canvas, E, D, pw, wsName, err, SERVER, VERSION: global.SCW_VERSION || '' };
     },
-    render: (function () { const { createElementVNode: _createElementVNode, toDisplayString: _toDisplayString, renderList: _renderList, Fragment: _Fragment, openBlock: _openBlock, createElementBlock: _createElementBlock, normalizeClass: _normalizeClass, vModelText: _vModelText, withDirectives: _withDirectives, createCommentVNode: _createCommentVNode, withModifiers: _withModifiers } = Vue
+    render: (function () { const { createElementVNode: _createElementVNode, openBlock: _openBlock, createElementBlock: _createElementBlock, createCommentVNode: _createCommentVNode, toDisplayString: _toDisplayString, renderList: _renderList, Fragment: _Fragment, normalizeClass: _normalizeClass, vModelText: _vModelText, withDirectives: _withDirectives, withModifiers: _withModifiers } = Vue
 
 const _hoisted_1 = { class: "login" }
 const _hoisted_2 = { class: "art" }
@@ -3530,32 +3553,38 @@ const _hoisted_3 = {
 const _hoisted_4 = /*#__PURE__*/_createElementVNode("span", {
   class: "tag ver",
   style: {"align-self":"flex-start","background":"rgba(0,0,0,.3)"}
-}, "V1.0 · 道具资产闭环 / V1.1 / V1.2", -1 /* HOISTED */)
+}, "v1.1 · 真实道具与精细展示", -1 /* HOISTED */)
 const _hoisted_5 = /*#__PURE__*/_createElementVNode("h1", null, "空间内容工场", -1 /* HOISTED */)
 const _hoisted_6 = /*#__PURE__*/_createElementVNode("p", null, "面向文旅与沉浸式项目团队的本地化 AIGC 空间内容生产平台：需求单 → 概念图 → 3D 资产 → 优化 → 质检 → 入库 → 组装 → 导出。单张 RTX 4090 自动排程，许可证、文博准确性与 AIGC 标识贯穿全流程。", -1 /* HOISTED */)
 const _hoisted_7 = /*#__PURE__*/_createElementVNode("h2", { style: {"font-family":"var(--f-display)","font-size":"22px"} }, "登录", -1 /* HOISTED */)
-const _hoisted_8 = { class: "note" }
-const _hoisted_9 = { class: "role-pick" }
-const _hoisted_10 = ["onClick"]
-const _hoisted_11 = { class: "field" }
-const _hoisted_12 = /*#__PURE__*/_createElementVNode("label", { for: "pw" }, "密码", -1 /* HOISTED */)
-const _hoisted_13 = {
+const _hoisted_8 = {
   key: 0,
+  class: "btn",
+  href: "/showcase",
+  style: {"margin-bottom":"12px"}
+}
+const _hoisted_9 = { class: "note" }
+const _hoisted_10 = { class: "role-pick" }
+const _hoisted_11 = ["onClick"]
+const _hoisted_12 = { class: "field" }
+const _hoisted_13 = /*#__PURE__*/_createElementVNode("label", { for: "pw" }, "密码", -1 /* HOISTED */)
+const _hoisted_14 = {
+  key: 1,
   class: "field"
 }
-const _hoisted_14 = /*#__PURE__*/_createElementVNode("label", { for: "ws" }, "工作区", -1 /* HOISTED */)
-const _hoisted_15 = /*#__PURE__*/_createElementVNode("span", { class: "faint small" }, "同一工作区的同事共享需求单、资产库与任务队列；对外演示可另开工作区（如 demo-zhang），互不干扰。", -1 /* HOISTED */)
-const _hoisted_16 = {
-  key: 1,
+const _hoisted_15 = /*#__PURE__*/_createElementVNode("label", { for: "ws" }, "工作区", -1 /* HOISTED */)
+const _hoisted_16 = /*#__PURE__*/_createElementVNode("span", { class: "faint small" }, "同一工作区的同事共享需求单、资产库与任务队列；对外演示可另开工作区（如 demo-zhang），互不干扰。", -1 /* HOISTED */)
+const _hoisted_17 = {
+  key: 2,
   class: "note err"
 }
-const _hoisted_17 = /*#__PURE__*/_createElementVNode("button", {
+const _hoisted_18 = /*#__PURE__*/_createElementVNode("button", {
   class: "btn primary",
   type: "submit",
   id: "login-btn",
   style: {"padding":"9px"}
 }, "进入平台", -1 /* HOISTED */)
-const _hoisted_18 = { class: "faint small" }
+const _hoisted_19 = { class: "faint small" }
 
 return function render(_ctx, _cache) {
   return (_openBlock(), _createElementBlock("div", _hoisted_1, [
@@ -3570,8 +3599,11 @@ return function render(_ctx, _cache) {
       onSubmit: _cache[2] || (_cache[2] = _withModifiers((...args) => (_ctx.enter && _ctx.enter(...args)), ["prevent"]))
     }, [
       _hoisted_7,
-      _createElementVNode("div", _hoisted_8, _toDisplayString(_ctx.st.production ? '真实生产环境：请选择账号，输入管理员提供的该账号密码。' : _ctx.SERVER ? '选择账号登录（演示密码 demo-2026，可由管理员通过环境变量修改）。登录后可在右上角切换账号，体验不同角色的权限。' : '演示环境：选择一个角色登录，可随时在右上角切换账号，体验不同角色的权限。'), 1 /* TEXT */),
-      _createElementVNode("div", _hoisted_9, [
+      (_ctx.SERVER)
+        ? (_openBlock(), _createElementBlock("a", _hoisted_8, "查看真实成果与版本对比"))
+        : _createCommentVNode("v-if", true),
+      _createElementVNode("div", _hoisted_9, _toDisplayString(_ctx.st.production ? '真实生产环境：请选择账号，输入管理员提供的该账号密码。' : _ctx.SERVER ? '选择账号登录（演示密码 demo-2026，可由管理员通过环境变量修改）。登录后可在右上角切换账号，体验不同角色的权限。' : '演示环境：选择一个角色登录，可随时在右上角切换账号，体验不同角色的权限。'), 1 /* TEXT */),
+      _createElementVNode("div", _hoisted_10, [
         (_openBlock(true), _createElementBlock(_Fragment, null, _renderList(_ctx.E.S.users, (u) => {
           return (_openBlock(), _createElementBlock("button", {
             type: "button",
@@ -3581,11 +3613,11 @@ return function render(_ctx, _cache) {
           }, [
             _createElementVNode("b", null, _toDisplayString(u.name), 1 /* TEXT */),
             _createElementVNode("span", null, _toDisplayString(_ctx.D.ROLES[u.role]), 1 /* TEXT */)
-          ], 10 /* CLASS, PROPS */, _hoisted_10))
+          ], 10 /* CLASS, PROPS */, _hoisted_11))
         }), 128 /* KEYED_FRAGMENT */))
       ]),
-      _createElementVNode("div", _hoisted_11, [
-        _hoisted_12,
+      _createElementVNode("div", _hoisted_12, [
+        _hoisted_13,
         _withDirectives(_createElementVNode("input", {
           id: "pw",
           class: "inp",
@@ -3597,8 +3629,8 @@ return function render(_ctx, _cache) {
         ])
       ]),
       (_ctx.SERVER)
-        ? (_openBlock(), _createElementBlock("div", _hoisted_13, [
-            _hoisted_14,
+        ? (_openBlock(), _createElementBlock("div", _hoisted_14, [
+            _hoisted_15,
             _withDirectives(_createElementVNode("input", {
               id: "ws",
               class: "inp",
@@ -3607,14 +3639,14 @@ return function render(_ctx, _cache) {
             }, null, 512 /* NEED_PATCH */), [
               [_vModelText, _ctx.wsName]
             ]),
-            _hoisted_15
+            _hoisted_16
           ]))
         : _createCommentVNode("v-if", true),
       (_ctx.err)
-        ? (_openBlock(), _createElementBlock("div", _hoisted_16, _toDisplayString(_ctx.err), 1 /* TEXT */))
+        ? (_openBlock(), _createElementBlock("div", _hoisted_17, _toDisplayString(_ctx.err), 1 /* TEXT */))
         : _createCommentVNode("v-if", true),
-      _hoisted_17,
-      _createElementVNode("p", _hoisted_18, "局域网访问 · 账号登录 · 角色权限（PRD 第 2 章权限矩阵）· v" + _toDisplayString(_ctx.VERSION), 1 /* TEXT */)
+      _hoisted_18,
+      _createElementVNode("p", _hoisted_19, "局域网访问 · 账号登录 · 角色权限（PRD 第 2 章权限矩阵）· v" + _toDisplayString(_ctx.VERSION), 1 /* TEXT */)
     ], 32 /* NEED_HYDRATION */)
   ]))
 } })(),
@@ -6057,7 +6089,7 @@ const _hoisted_33 = { class: "stack" }
 const _hoisted_34 = { class: "panel" }
 const _hoisted_35 = /*#__PURE__*/_createElementVNode("header", null, [
   /*#__PURE__*/_createElementVNode("h3", null, "目标预设"),
-  /*#__PURE__*/_createElementVNode("span", { class: "sub" }, "默认来自需求单目标平台")
+  /*#__PURE__*/_createElementVNode("span", { class: "sub" }, "展示母版与终端交付分别保留")
 ], -1 /* HOISTED */)
 const _hoisted_36 = { class: "body stack" }
 const _hoisted_37 = { class: "seg" }
@@ -6241,7 +6273,7 @@ return function render(_ctx, _cache) {
               _hoisted_35,
               _createElementVNode("div", _hoisted_36, [
                 _createElementVNode("div", _hoisted_37, [
-                  (_openBlock(), _createElementBlock(_Fragment, null, _renderList(['quest3','webxr','xr_space','custom'], (k) => {
+                  (_openBlock(), _createElementBlock(_Fragment, null, _renderList(['hero','quest3','webxr','xr_space','custom'], (k) => {
                     return _createElementVNode("button", {
                       key: k,
                       class: _normalizeClass({on: _ctx.preset===k}),
@@ -9484,9 +9516,11 @@ const _hoisted_71 = /*#__PURE__*/_createElementVNode("div", null, "被引用场�
 const _hoisted_72 = /*#__PURE__*/_createElementVNode("div", { class: "lbl" }, "许可链", -1 /* HOISTED */)
 const _hoisted_73 = { class: "tag" }
 const _hoisted_74 = /*#__PURE__*/_createElementVNode("div", { class: "lbl" }, "版本历史", -1 /* HOISTED */)
-const _hoisted_75 = /*#__PURE__*/_createElementVNode("span", { class: "spacer" }, null, -1 /* HOISTED */)
-const _hoisted_76 = ["onClick"]
-const _hoisted_77 = { class: "row" }
+const _hoisted_75 = { class: "tag" }
+const _hoisted_76 = ["href", "download"]
+const _hoisted_77 = /*#__PURE__*/_createElementVNode("span", { class: "spacer" }, null, -1 /* HOISTED */)
+const _hoisted_78 = ["onClick"]
+const _hoisted_79 = { class: "row" }
 
 return function render(_ctx, _cache) {
   const _component_c_head = _resolveComponent("c-head")
@@ -9732,17 +9766,26 @@ return function render(_ctx, _cache) {
                   }, [
                     _createElementVNode("b", null, "v" + _toDisplayString(v.version), 1 /* TEXT */),
                     _createElementVNode("span", null, _toDisplayString(_ctx.U.dt(v.created_at)), 1 /* TEXT */),
+                    _createElementVNode("span", _hoisted_75, _toDisplayString((_ctx.E.S.settings.presets[v.preset]||{}).name || '原始版本'), 1 /* TEXT */),
+                    (v.approved && v.file_url)
+                      ? (_openBlock(), _createElementBlock("a", {
+                          key: 0,
+                          class: "btn sm",
+                          href: v.file_url,
+                          download: _ctx.cur.code+'_v'+v.version+'.glb'
+                        }, "下载此版本", 8 /* PROPS */, _hoisted_76))
+                      : _createCommentVNode("v-if", true),
                     _createVNode(_component_c_pill, {
                       kind: v.approved?'ok':'plain',
                       text: v.approved?'通过':v.rework_of?'返工版本':'候选'
                     }, null, 8 /* PROPS */, ["kind", "text"]),
-                    _hoisted_75,
+                    _hoisted_77,
                     (v.approved && v.id!==_ctx.cur.current_version)
                       ? (_openBlock(), _createElementBlock("button", {
-                          key: 0,
+                          key: 1,
                           class: "btn sm",
                           onClick: $event => (_ctx.act(()=>_ctx.E.rollback(_ctx.cur.id,v.id),'已回退'))
-                        }, "回退", 8 /* PROPS */, _hoisted_76))
+                        }, "回退", 8 /* PROPS */, _hoisted_78))
                       : _createCommentVNode("v-if", true)
                   ]))
                 }), 128 /* KEYED_FRAGMENT */)),
@@ -9753,7 +9796,7 @@ return function render(_ctx, _cache) {
                   }, _toDisplayString(_ctx.U.dt(h.time)) + " · " + _toDisplayString(h.action) + " · " + _toDisplayString(h.detail), 1 /* TEXT */))
                 }), 128 /* KEYED_FRAGMENT */))
               ]),
-              _createElementVNode("div", _hoisted_77, [
+              _createElementVNode("div", _hoisted_79, [
                 (_ctx.cur.type==='prop')
                   ? (_openBlock(), _createElementBlock("button", {
                       key: 0,

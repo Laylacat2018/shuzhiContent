@@ -43,8 +43,35 @@ def test_production_has_no_seeded_assets_and_cannot_fastforward(api):
     assert s['runtime']['mode']=='production'
     assert not s['assets'] and not s['tasks'] and not s['licenses']
     assert s['release']=='V1.0'
+    assert s['settings']['presets']['hero']['tris']==60000
     for fn,args in [('enqueue',[{'node':'image_to_3d'}]),('reset',[]),('patch',['asset','x','status','library']),('audit',[])]:
         assert client.post('/api/v1/rpc',headers=h,json={'fn':fn,'args':args}).status_code==403
+
+
+def test_published_showcase_is_real_and_separate_from_workspace_files(api):
+    import hashlib
+    client,app=api
+    catalog=client.get('/showcase/catalog').json()
+    assert catalog['version']=='1.1.0' and catalog['sample_kind']=='actual_artifact'
+    assert {v['id'] for v in catalog['variants']}=={'hero','webxr'}
+    for entry in catalog['files']:
+        response=client.get('/showcase/assets/'+entry['name'])
+        assert response.status_code==200
+        assert len(response.content)==entry['bytes']
+        assert hashlib.sha256(response.content).hexdigest()==entry['sha256']
+    assert client.get('/api/v1/state').status_code==401
+    assert client.get('/showcase/assets/runtime.env').status_code==404
+    assert '真实成果' in client.get('/showcase').text
+
+
+def test_quality_profile_migration_keeps_old_presets_and_files(api):
+    client,app=api;login(client);host=app.H()
+    before=json.loads(host.state('real-test'))
+    host.query('real-test','u_admin',None,"(delete E.S.settings.presets.hero, E.ensureQualityProfiles(E.S), true)")
+    after=json.loads(host.state('real-test'))
+    assert after['settings']['presets']['webxr']==before['settings']['presets']['webxr']
+    assert after['assets']==before['assets']
+    assert after['settings']['presets']['hero']['tex']==2048
 
 
 def test_real_upload_is_workspace_scoped_and_byte_preserving(api):
@@ -176,19 +203,19 @@ def test_cancel_really_terminates_the_worker_process(api,tmp_path):
 
 
 @pytest.mark.skipif(not os.getenv('SCW_BPY_PYTHON'),reason='requires actual Blender bpy')
-@pytest.mark.parametrize('open_surface',[False,True])
-def test_mesh_processing_and_qa_use_real_glb(tmp_path,open_surface):
+@pytest.mark.parametrize('open_surface,target,texture',[(False,5000,256),(True,5000,256),(False,60000,2048)])
+def test_mesh_processing_and_qa_use_real_glb(tmp_path,open_surface,target,texture):
     script=ROOT/'tests/fixtures/create_mesh.py';py=os.environ['SCW_BPY_PYTHON']
     source=tmp_path/'source.glb'
     r=subprocess.run([py,str(script),str(source)]+(['--open-sheet'] if open_surface else []),capture_output=True,text=True,timeout=120)
     assert r.returncode==0,r.stdout+r.stderr
-    request={'input':str(source),'output':str(tmp_path/'low.glb'),'blend':str(tmp_path/'low.blend'),'report':str(tmp_path/'report.json'),'operation':'optimize','preset':{'tris':5000,'tex':256,'materials':1},'mark':{'generated':True,'model':'TEST FIXTURE','seed':1,'time':'2026-11-16T00:00:00Z'}}
+    request={'input':str(source),'output':str(tmp_path/'low.glb'),'blend':str(tmp_path/'low.blend'),'report':str(tmp_path/'report.json'),'operation':'optimize','preset':{'tris':target,'tex':texture,'materials':1},'mark':{'generated':True,'model':'TEST FIXTURE','seed':1,'time':'2026-11-16T00:00:00Z'}}
     req=tmp_path/'request.json';req.write_text(json.dumps(request),'utf-8')
     r=subprocess.run([py,str(ROOT/'ops/production/mesh_pipeline.py'),str(req)],capture_output=True,text=True,timeout=240)
     assert r.returncode==0,(r.stdout+r.stderr)[-8000:]
     result=json.loads((tmp_path/'report.json').read_text('utf-8'))
-    assert result['stats']['tris']<=5000
-    assert result['stats']['texture']==256 and result['stats']['materials']==1
+    assert result['stats']['tris']<=target
+    assert result['stats']['texture']==texture and result['stats']['materials']==1
     assert result['stats']['origin_offset_m']<.005
     assert result['stats']['nonmanifold']==0
     assert result['mark_valid']
