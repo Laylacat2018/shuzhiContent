@@ -311,7 +311,7 @@ pre.code { font-family: var(--f-mono); font-size: 11.5px; background: var(--surf
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/DRACOLoader.js"></script>
 <div id="app"></div>
-<script>window.SCW_MODE = 'artifact'; window.SCW_VERSION = '1.1.0';</script>
+<script>window.SCW_MODE = 'artifact'; window.SCW_VERSION = '1.1.1';</script>
 <script>
 /* 空间内容工场 · 程序化几何 / 贴图 / GLB 写出
  * 演示版用确定性的程序化生成代替真实模型推理：同一 seed + 参数必然得到同一结果，
@@ -2872,7 +2872,11 @@ pre.code { font-family: var(--f-mono); font-size: 11.5px; background: var(--surf
     for (const file of inputFiles) {
       const form = new FormData(); form.append('file', file);
       const response = await fetch('/api/v1/files', { method: 'POST', headers: { Authorization: 'Bearer ' + net.token }, body: form });
-      const data = await response.json(); if (!response.ok) throw new Error(data.detail || '上传失败'); result.push(data);
+    const data = await response.json().catch(() => null);
+    if (!response.ok || !data?.file_id) {
+      throw new Error(data?.detail || (response.status === 413 ? '文件超过服务器上传限制' : `上传失败（HTTP ${response.status}）`));
+    }
+    result.push(data);
     }
     return result;
   }
@@ -3385,15 +3389,22 @@ const _hoisted_22 = {
 }
 const _hoisted_23 = { class: "main" }
 const _hoisted_24 = {
-  key: 1,
+  key: 0,
   class: "page"
 }
-const _hoisted_25 = /*#__PURE__*/_createElementVNode("div", { class: "panel locked" }, [
+const _hoisted_25 = { class: "panel locked" }
+const _hoisted_26 = /*#__PURE__*/_createElementVNode("h3", null, "实景重建暂未接入", -1 /* HOISTED */)
+const _hoisted_27 = /*#__PURE__*/_createElementVNode("p", null, "还原文物本体需要覆盖不同角度的照片或视频。只有一张图时，可以把它作为展陈道具或文物风格资产的创意参考。", -1 /* HOISTED */)
+const _hoisted_28 = {
+  key: 2,
+  class: "page"
+}
+const _hoisted_29 = /*#__PURE__*/_createElementVNode("div", { class: "panel locked" }, [
   /*#__PURE__*/_createElementVNode("h3", null, "仅管理员可访问系统设置"),
   /*#__PURE__*/_createElementVNode("p", null, "请在右上角切换为管理员账号。")
 ], -1 /* HOISTED */)
-const _hoisted_26 = [
-  _hoisted_25
+const _hoisted_30 = [
+  _hoisted_29
 ]
 
 return function render(_ctx, _cache) {
@@ -3513,17 +3524,28 @@ return function render(_ctx, _cache) {
       }), 128 /* KEYED_FRAGMENT */))
     ]),
     _createElementVNode("main", _hoisted_23, [
-      (_ctx.locked)
-        ? (_openBlock(), _createBlock(_component_c_locked, {
-            key: 0,
-            ver: _ctx.item.ver,
-            style: {"margin":"18px"}
-          }, null, 8 /* PROPS */, ["ver"]))
-        : (_ctx.item.admin && _ctx.role!=='admin')
-          ? (_openBlock(), _createElementBlock("div", _hoisted_24, _hoisted_26))
-          : (_openBlock(), _createBlock(_resolveDynamicComponent(_ctx.pageComp), {
-              key: _ctx.st.route
-            }))
+      (_ctx.locked && _ctx.st.production && _ctx.item.r==='recon')
+        ? (_openBlock(), _createElementBlock("div", _hoisted_24, [
+            _createElementVNode("div", _hoisted_25, [
+              _hoisted_26,
+              _hoisted_27,
+              _createElementVNode("button", {
+                class: "btn primary",
+                onClick: _cache[6] || (_cache[6] = $event => (_ctx.go('jobs',{create:true,reference:true})))
+              }, "新建单图参考需求")
+            ])
+          ]))
+        : (_ctx.locked)
+          ? (_openBlock(), _createBlock(_component_c_locked, {
+              key: 1,
+              ver: _ctx.item.ver,
+              style: {"margin":"18px"}
+            }, null, 8 /* PROPS */, ["ver"]))
+          : (_ctx.item.admin && _ctx.role!=='admin')
+            ? (_openBlock(), _createElementBlock("div", _hoisted_28, _hoisted_30))
+            : (_openBlock(), _createBlock(_resolveDynamicComponent(_ctx.pageComp), {
+                key: _ctx.st.route
+              }))
     ])
   ], 8 /* PROPS */, _hoisted_1))
 } })(),
@@ -4141,7 +4163,7 @@ return function render(_ctx, _cache) {
       const mode = ref(st.params.create ? 'new' : 'list');
       const sel = ref(null);
       const step = ref(0);
-      const blank = () => ({ title: '', project_id: E.S.currentProjectId, quantity: 20, description: '', ref_images: [], content_type: 'prop', platforms: (E.project().default_platforms || ['quest3']).slice(), usage_scope: E.project().usage_scope, style_lora: '', is_heritage: null, models: {} });
+      const blank = () => ({ title: '', project_id: E.S.currentProjectId, quantity: st.params.reference ? 1 : 20, description: '', ref_images: [], content_type: 'prop', platforms: (E.project().default_platforms || ['quest3']).slice(), usage_scope: E.project().usage_scope, style_lora: '', is_heritage: null, models: {}, ai_restore: false });
       const f = reactive(blank());
       const editing = ref(null);
       const pre = computed(() => { st.rev; try { return E.precheck(Object.assign({}, f, { is_heritage: !!f.is_heritage })); } catch (e) { return null; } });
@@ -4155,79 +4177,115 @@ return function render(_ctx, _cache) {
       const stepNames = ['基本信息', '内容类型', '目标平台', '管线模板', '确认提交'];
       const next = () => { if (step.value === 0 && !f.title) return toast('请填写需求名称', 'err'); if (step.value === 1 && f.is_heritage === null) return toast('“是否文物本体”为必填项', 'err'); if (step.value === 2 && !f.platforms.length) return toast('请至少选择一个目标平台', 'err'); step.value = Math.min(4, step.value + 1); };
       const togglePlat = (p) => { const i = f.platforms.indexOf(p); i >= 0 ? f.platforms.splice(i, 1) : f.platforms.push(p); };
-      const onRef = async (e) => { try { f.ref_images = E.S.runtime?.mode === 'production' ? await global.SCW.uploadFiles(e.target.files) : [...e.target.files].map(x => x.name); } catch (err) { toast(err.message, 'err'); } };
+      const uploadingRef = ref(false);
+      const refError = ref('');
+      const onRef = async (event) => {
+        const input = event.target;
+        const file = input.files[0];
+        if (!file || uploadingRef.value) return;
+        uploadingRef.value = true;
+        refError.value = '';
+        try {
+          f.ref_images = st.production ? await global.SCW.uploadFiles([file]) : [file.name];
+        } catch (error) {
+          refError.value = error.message;
+        } finally {
+          uploadingRef.value = false;
+          input.value = '';
+        }
+      };
       const save = (submit) => {
-        const payload = JSON.parse(JSON.stringify(f));
+        if (uploadingRef.value) return toast('请等待参考图上传完成', 'err');
+        const payload = Object.fromEntries(Object.keys(blank()).filter(key => !st.production || key !== 'models').map(key => [key, f[key]]));
         const j = act(() => { let job; if (editing.value) job = E.updateJob(editing.value, payload); else job = E.createJob(payload); if (submit) E.submitJob(job.id); return job; }, submit ? (j) => `已提交 ${j.code}，任务已拆分进入队列` : '已存为草稿');
         if (j) { mode.value = 'list'; sel.value = j.id; Object.assign(f, blank()); step.value = 0; editing.value = null; }
       };
-      const newJob = () => { Object.assign(f, blank()); step.value = 0; editing.value = null; mode.value = 'new'; };
-      const editDraft = (j) => { Object.assign(f, JSON.parse(JSON.stringify(j))); f.models = j.models || {}; editing.value = j.id; step.value = 0; mode.value = 'new'; };
+      const newJob = () => { Object.assign(f, blank()); refError.value = ''; step.value = 0; editing.value = null; mode.value = 'new'; };
+      const editDraft = (j) => {
+        const draft = blank();
+        for (const key of Object.keys(draft)) if (Object.hasOwn(j, key)) draft[key] = JSON.parse(JSON.stringify(j[key]));
+        Object.assign(f, draft);
+        refError.value = ''; editing.value = j.id; step.value = 0; mode.value = 'new';
+      };
       const submitDraft = (j) => act(() => E.submitJob(j.id), '已提交并拆分任务');
       const nodeOptions = (type) => E.modelsFor(type, Object.assign({}, E.project(f.project_id), { usage_scope: f.usage_scope }));
       const templateExample = 'concept → pick(人工) → gen3d → optimize → qa → review(人工)';
-      return { mode, sel, step, f, pre, jobs, cur, curTasks, curAssets, loras, stepNames, next, togglePlat, onRef, save, newJob, editDraft, submitDraft, nodeOptions, templateExample, E, D, U, st, go, act };
+      return { mode, sel, step, f, pre, jobs, cur, curTasks, curAssets, loras, stepNames, next, togglePlat, onRef, uploadingRef, refError, save, newJob, editDraft, submitDraft, nodeOptions, templateExample, E, D, U, st, go, act };
     },
-    render: (function () { const { openBlock: _openBlock, createElementBlock: _createElementBlock, createCommentVNode: _createCommentVNode, resolveComponent: _resolveComponent, withCtx: _withCtx, createVNode: _createVNode, createElementVNode: _createElementVNode, vModelText: _vModelText, withDirectives: _withDirectives, renderList: _renderList, Fragment: _Fragment, toDisplayString: _toDisplayString, vModelSelect: _vModelSelect, vModelRadio: _vModelRadio, createTextVNode: _createTextVNode, normalizeClass: _normalizeClass } = Vue
+    render: (function () { const { openBlock: _openBlock, createElementBlock: _createElementBlock, createCommentVNode: _createCommentVNode, resolveComponent: _resolveComponent, withCtx: _withCtx, createVNode: _createVNode, createElementVNode: _createElementVNode, vModelText: _vModelText, withDirectives: _withDirectives, renderList: _renderList, Fragment: _Fragment, toDisplayString: _toDisplayString, vModelSelect: _vModelSelect, createTextVNode: _createTextVNode, vModelRadio: _vModelRadio, normalizeClass: _normalizeClass } = Vue
 
 const _hoisted_1 = ["data-r"]
-const _hoisted_2 = {
+const _hoisted_2 = ["disabled"]
+const _hoisted_3 = {
   class: "panel",
   style: {"margin-bottom":"12px"}
 }
-const _hoisted_3 = { class: "body" }
-const _hoisted_4 = { class: "split" }
-const _hoisted_5 = { class: "panel" }
-const _hoisted_6 = { class: "body stack" }
-const _hoisted_7 = { class: "grid g2" }
-const _hoisted_8 = { class: "field" }
-const _hoisted_9 = /*#__PURE__*/_createElementVNode("label", {
+const _hoisted_4 = { class: "body" }
+const _hoisted_5 = { class: "split" }
+const _hoisted_6 = { class: "panel" }
+const _hoisted_7 = { class: "body stack" }
+const _hoisted_8 = { class: "grid g2" }
+const _hoisted_9 = { class: "field" }
+const _hoisted_10 = /*#__PURE__*/_createElementVNode("label", {
   class: "req",
   for: "job-title"
 }, "需求名称", -1 /* HOISTED */)
-const _hoisted_10 = { class: "field" }
-const _hoisted_11 = /*#__PURE__*/_createElementVNode("label", { for: "job-project" }, "所属项目", -1 /* HOISTED */)
-const _hoisted_12 = ["value"]
-const _hoisted_13 = { class: "field" }
-const _hoisted_14 = /*#__PURE__*/_createElementVNode("label", { for: "job-qty" }, "数量（件）", -1 /* HOISTED */)
-const _hoisted_15 = { class: "field" }
-const _hoisted_16 = /*#__PURE__*/_createElementVNode("label", { for: "job-ref" }, "参考图上传", -1 /* HOISTED */)
-const _hoisted_17 = {
+const _hoisted_11 = { class: "field" }
+const _hoisted_12 = /*#__PURE__*/_createElementVNode("label", { for: "job-project" }, "所属项目", -1 /* HOISTED */)
+const _hoisted_13 = ["value"]
+const _hoisted_14 = { class: "field" }
+const _hoisted_15 = /*#__PURE__*/_createElementVNode("label", { for: "job-qty" }, "数量（件）", -1 /* HOISTED */)
+const _hoisted_16 = { class: "field" }
+const _hoisted_17 = { for: "job-ref" }
+const _hoisted_18 = ["disabled"]
+const _hoisted_19 = { class: "faint small" }
+const _hoisted_20 = {
   key: 0,
-  class: "faint small"
+  class: "small",
+  role: "status"
 }
-const _hoisted_18 = { class: "field" }
-const _hoisted_19 = /*#__PURE__*/_createElementVNode("label", { for: "job-desc" }, "需求描述（将预填为概念图提示词）", -1 /* HOISTED */)
-const _hoisted_20 = { class: "field" }
-const _hoisted_21 = /*#__PURE__*/_createElementVNode("label", { class: "req" }, "是否文物本体", -1 /* HOISTED */)
-const _hoisted_22 = { class: "row" }
-const _hoisted_23 = { class: "check" }
-const _hoisted_24 = { class: "check" }
-const _hoisted_25 = {
+const _hoisted_21 = {
+  key: 1,
+  class: "small",
+  role: "status"
+}
+const _hoisted_22 = {
+  key: 2,
+  class: "note err small",
+  role: "alert"
+}
+const _hoisted_23 = { class: "field" }
+const _hoisted_24 = /*#__PURE__*/_createElementVNode("label", { for: "job-desc" }, "需求描述（将预填为概念图提示词）", -1 /* HOISTED */)
+const _hoisted_25 = { class: "field" }
+const _hoisted_26 = /*#__PURE__*/_createElementVNode("label", { class: "req" }, "是否文物本体", -1 /* HOISTED */)
+const _hoisted_27 = { class: "row" }
+const _hoisted_28 = { class: "check" }
+const _hoisted_29 = { class: "check" }
+const _hoisted_30 = {
   key: 0,
   class: "note warn"
 }
-const _hoisted_26 = { class: "field" }
-const _hoisted_27 = /*#__PURE__*/_createElementVNode("label", null, "内容类型", -1 /* HOISTED */)
-const _hoisted_28 = { class: "grid g3" }
-const _hoisted_29 = ["value", "disabled", "id"]
-const _hoisted_30 = { class: "grid g2" }
 const _hoisted_31 = { class: "field" }
-const _hoisted_32 = /*#__PURE__*/_createElementVNode("label", { for: "job-scope" }, "使用范围", -1 /* HOISTED */)
-const _hoisted_33 = ["value"]
-const _hoisted_34 = /*#__PURE__*/_createElementVNode("span", { class: "faint small" }, "默认取项目使用范围，决定许可证规则", -1 /* HOISTED */)
-const _hoisted_35 = { class: "field" }
-const _hoisted_36 = /*#__PURE__*/_createElementVNode("label", { for: "job-lora" }, "风格 LoRA", -1 /* HOISTED */)
-const _hoisted_37 = ["disabled"]
-const _hoisted_38 = /*#__PURE__*/_createElementVNode("option", { value: "" }, "不使用", -1 /* HOISTED */)
-const _hoisted_39 = ["value"]
+const _hoisted_32 = /*#__PURE__*/_createElementVNode("label", null, "内容类型", -1 /* HOISTED */)
+const _hoisted_33 = { class: "grid g3" }
+const _hoisted_34 = ["value", "disabled", "id"]
+const _hoisted_35 = { class: "grid g2" }
+const _hoisted_36 = { class: "field" }
+const _hoisted_37 = /*#__PURE__*/_createElementVNode("label", { for: "job-scope" }, "使用范围", -1 /* HOISTED */)
+const _hoisted_38 = ["value"]
+const _hoisted_39 = /*#__PURE__*/_createElementVNode("span", { class: "faint small" }, "默认取项目使用范围，决定许可证规则", -1 /* HOISTED */)
 const _hoisted_40 = { class: "field" }
-const _hoisted_41 = /*#__PURE__*/_createElementVNode("label", null, "目标平台（多选，决定性能预算和导出格式；多个平台时单件预算取最严格的一个）", -1 /* HOISTED */)
-const _hoisted_42 = { class: "row" }
-const _hoisted_43 = ["checked", "onChange", "id"]
-const _hoisted_44 = { class: "tbl-wrap" }
-const _hoisted_45 = { class: "tbl" }
-const _hoisted_46 = /*#__PURE__*/_createElementVNode("thead", null, [
+const _hoisted_41 = /*#__PURE__*/_createElementVNode("label", { for: "job-lora" }, "风格 LoRA", -1 /* HOISTED */)
+const _hoisted_42 = ["disabled"]
+const _hoisted_43 = /*#__PURE__*/_createElementVNode("option", { value: "" }, "不使用", -1 /* HOISTED */)
+const _hoisted_44 = ["value"]
+const _hoisted_45 = { class: "field" }
+const _hoisted_46 = /*#__PURE__*/_createElementVNode("label", null, "目标平台（多选，决定性能预算和导出格式；多个平台时单件预算取最严格的一个）", -1 /* HOISTED */)
+const _hoisted_47 = { class: "row" }
+const _hoisted_48 = ["checked", "onChange", "id"]
+const _hoisted_49 = { class: "tbl-wrap" }
+const _hoisted_50 = { class: "tbl" }
+const _hoisted_51 = /*#__PURE__*/_createElementVNode("thead", null, [
   /*#__PURE__*/_createElementVNode("tr", null, [
     /*#__PURE__*/_createElementVNode("th", null, "平台"),
     /*#__PURE__*/_createElementVNode("th", null, "预设"),
@@ -4239,18 +4297,18 @@ const _hoisted_46 = /*#__PURE__*/_createElementVNode("thead", null, [
     /*#__PURE__*/_createElementVNode("th", null, "来源")
   ])
 ], -1 /* HOISTED */)
-const _hoisted_47 = { class: "r" }
-const _hoisted_48 = { class: "r" }
-const _hoisted_49 = { class: "r" }
-const _hoisted_50 = { class: "r" }
-const _hoisted_51 = { class: "r" }
-const _hoisted_52 = { class: "small muted" }
-const _hoisted_53 = { class: "row" }
-const _hoisted_54 = { class: "tag mono" }
-const _hoisted_55 = /*#__PURE__*/_createElementVNode("span", { class: "faint small" }, "按内容类型与目标平台自动匹配", -1 /* HOISTED */)
-const _hoisted_56 = { class: "tbl-wrap" }
-const _hoisted_57 = { class: "tbl" }
-const _hoisted_58 = /*#__PURE__*/_createElementVNode("thead", null, [
+const _hoisted_52 = { class: "r" }
+const _hoisted_53 = { class: "r" }
+const _hoisted_54 = { class: "r" }
+const _hoisted_55 = { class: "r" }
+const _hoisted_56 = { class: "r" }
+const _hoisted_57 = { class: "small muted" }
+const _hoisted_58 = { class: "row" }
+const _hoisted_59 = { class: "tag mono" }
+const _hoisted_60 = /*#__PURE__*/_createElementVNode("span", { class: "faint small" }, "按内容类型与目标平台自动匹配", -1 /* HOISTED */)
+const _hoisted_61 = { class: "tbl-wrap" }
+const _hoisted_62 = { class: "tbl" }
+const _hoisted_63 = /*#__PURE__*/_createElementVNode("thead", null, [
   /*#__PURE__*/_createElementVNode("tr", null, [
     /*#__PURE__*/_createElementVNode("th", null, "节点"),
     /*#__PURE__*/_createElementVNode("th", null, "模型 / 工具"),
@@ -4259,93 +4317,93 @@ const _hoisted_58 = /*#__PURE__*/_createElementVNode("thead", null, [
     /*#__PURE__*/_createElementVNode("th", { class: "r" }, "单件耗时")
   ])
 ], -1 /* HOISTED */)
-const _hoisted_59 = {
+const _hoisted_64 = {
   key: 0,
   class: "tag",
   style: {"margin-left":"6px"}
 }
-const _hoisted_60 = ["value", "onChange"]
-const _hoisted_61 = ["value", "disabled"]
-const _hoisted_62 = { class: "r" }
-const _hoisted_63 = { class: "r" }
-const _hoisted_64 = { class: "kv" }
-const _hoisted_65 = /*#__PURE__*/_createElementVNode("div", null, "需求名称", -1 /* HOISTED */)
-const _hoisted_66 = /*#__PURE__*/_createElementVNode("div", null, "项目", -1 /* HOISTED */)
-const _hoisted_67 = /*#__PURE__*/_createElementVNode("div", null, "使用范围", -1 /* HOISTED */)
-const _hoisted_68 = /*#__PURE__*/_createElementVNode("div", null, "内容类型", -1 /* HOISTED */)
-const _hoisted_69 = /*#__PURE__*/_createElementVNode("div", null, "文物本体", -1 /* HOISTED */)
-const _hoisted_70 = /*#__PURE__*/_createElementVNode("div", null, "目标平台", -1 /* HOISTED */)
-const _hoisted_71 = /*#__PURE__*/_createElementVNode("div", null, "数量", -1 /* HOISTED */)
-const _hoisted_72 = /*#__PURE__*/_createElementVNode("div", null, "单件预算", -1 /* HOISTED */)
-const _hoisted_73 = {
+const _hoisted_65 = ["value", "onChange"]
+const _hoisted_66 = ["value", "disabled"]
+const _hoisted_67 = { class: "r" }
+const _hoisted_68 = { class: "r" }
+const _hoisted_69 = { class: "kv" }
+const _hoisted_70 = /*#__PURE__*/_createElementVNode("div", null, "需求名称", -1 /* HOISTED */)
+const _hoisted_71 = /*#__PURE__*/_createElementVNode("div", null, "项目", -1 /* HOISTED */)
+const _hoisted_72 = /*#__PURE__*/_createElementVNode("div", null, "使用范围", -1 /* HOISTED */)
+const _hoisted_73 = /*#__PURE__*/_createElementVNode("div", null, "内容类型", -1 /* HOISTED */)
+const _hoisted_74 = /*#__PURE__*/_createElementVNode("div", null, "文物本体", -1 /* HOISTED */)
+const _hoisted_75 = /*#__PURE__*/_createElementVNode("div", null, "目标平台", -1 /* HOISTED */)
+const _hoisted_76 = /*#__PURE__*/_createElementVNode("div", null, "数量", -1 /* HOISTED */)
+const _hoisted_77 = /*#__PURE__*/_createElementVNode("div", null, "单件预算", -1 /* HOISTED */)
+const _hoisted_78 = {
   key: 0,
   class: "note err"
 }
-const _hoisted_74 = { class: "row" }
-const _hoisted_75 = ["disabled"]
-const _hoisted_76 = {
+const _hoisted_79 = { class: "row" }
+const _hoisted_80 = ["disabled"]
+const _hoisted_81 = {
   key: 5,
   class: "row"
 }
-const _hoisted_77 = /*#__PURE__*/_createElementVNode("span", { class: "spacer" }, null, -1 /* HOISTED */)
-const _hoisted_78 = {
+const _hoisted_82 = /*#__PURE__*/_createElementVNode("span", { class: "spacer" }, null, -1 /* HOISTED */)
+const _hoisted_83 = {
   key: 0,
   class: "stack"
 }
-const _hoisted_79 = { class: "panel" }
-const _hoisted_80 = /*#__PURE__*/_createElementVNode("header", null, [
+const _hoisted_84 = { class: "panel" }
+const _hoisted_85 = /*#__PURE__*/_createElementVNode("header", null, [
   /*#__PURE__*/_createElementVNode("h3", null, "管线预览"),
   /*#__PURE__*/_createElementVNode("span", { class: "sub" }, "即时重算")
 ], -1 /* HOISTED */)
-const _hoisted_81 = { class: "body stack" }
-const _hoisted_82 = {
+const _hoisted_86 = { class: "body stack" }
+const _hoisted_87 = {
   key: 0,
   class: "tag"
 }
-const _hoisted_83 = {
+const _hoisted_88 = {
   class: "small muted",
   style: {"text-align":"right"}
 }
-const _hoisted_84 = /*#__PURE__*/_createElementVNode("div", { class: "divider" }, null, -1 /* HOISTED */)
-const _hoisted_85 = { class: "kv" }
-const _hoisted_86 = /*#__PURE__*/_createElementVNode("div", null, "预估 GPU 耗时", -1 /* HOISTED */)
-const _hoisted_87 = { class: "num" }
-const _hoisted_88 = { class: "faint small" }
-const _hoisted_89 = /*#__PURE__*/_createElementVNode("div", null, "预估总耗时", -1 /* HOISTED */)
-const _hoisted_90 = { class: "num" }
-const _hoisted_91 = /*#__PURE__*/_createElementVNode("div", null, "人工节点", -1 /* HOISTED */)
-const _hoisted_92 = /*#__PURE__*/_createElementVNode("div", null, "显存峰值", -1 /* HOISTED */)
-const _hoisted_93 = /*#__PURE__*/_createElementVNode("div", null, "单件预算", -1 /* HOISTED */)
-const _hoisted_94 = { class: "panel" }
-const _hoisted_95 = /*#__PURE__*/_createElementVNode("h3", null, "许可证检查", -1 /* HOISTED */)
-const _hoisted_96 = { class: "body stack" }
-const _hoisted_97 = { class: "small muted" }
-const _hoisted_98 = { key: 0 }
-const _hoisted_99 = /*#__PURE__*/_createElementVNode("div", {
+const _hoisted_89 = /*#__PURE__*/_createElementVNode("div", { class: "divider" }, null, -1 /* HOISTED */)
+const _hoisted_90 = { class: "kv" }
+const _hoisted_91 = /*#__PURE__*/_createElementVNode("div", null, "预估 GPU 耗时", -1 /* HOISTED */)
+const _hoisted_92 = { class: "num" }
+const _hoisted_93 = { class: "faint small" }
+const _hoisted_94 = /*#__PURE__*/_createElementVNode("div", null, "预估总耗时", -1 /* HOISTED */)
+const _hoisted_95 = { class: "num" }
+const _hoisted_96 = /*#__PURE__*/_createElementVNode("div", null, "人工节点", -1 /* HOISTED */)
+const _hoisted_97 = /*#__PURE__*/_createElementVNode("div", null, "显存峰值", -1 /* HOISTED */)
+const _hoisted_98 = /*#__PURE__*/_createElementVNode("div", null, "单件预算", -1 /* HOISTED */)
+const _hoisted_99 = { class: "panel" }
+const _hoisted_100 = /*#__PURE__*/_createElementVNode("h3", null, "许可证检查", -1 /* HOISTED */)
+const _hoisted_101 = { class: "body stack" }
+const _hoisted_102 = { class: "small muted" }
+const _hoisted_103 = { key: 0 }
+const _hoisted_104 = /*#__PURE__*/_createElementVNode("div", {
   class: "lbl",
   style: {"margin-bottom":"4px"}
 }, "被排除的模型（不出现在管线中）", -1 /* HOISTED */)
-const _hoisted_100 = { class: "faint" }
-const _hoisted_101 = /*#__PURE__*/_createElementVNode("br", null, null, -1 /* HOISTED */)
-const _hoisted_102 = { class: "muted" }
-const _hoisted_103 = {
+const _hoisted_105 = { class: "faint" }
+const _hoisted_106 = /*#__PURE__*/_createElementVNode("br", null, null, -1 /* HOISTED */)
+const _hoisted_107 = { class: "muted" }
+const _hoisted_108 = {
   key: 1,
   class: "small muted"
 }
-const _hoisted_104 = {
+const _hoisted_109 = {
   key: 1,
   class: "split"
 }
-const _hoisted_105 = { class: "panel" }
-const _hoisted_106 = /*#__PURE__*/_createElementVNode("h3", null, "需求单列表", -1 /* HOISTED */)
-const _hoisted_107 = { class: "sub" }
-const _hoisted_108 = {
+const _hoisted_110 = { class: "panel" }
+const _hoisted_111 = /*#__PURE__*/_createElementVNode("h3", null, "需求单列表", -1 /* HOISTED */)
+const _hoisted_112 = { class: "sub" }
+const _hoisted_113 = {
   key: 0,
   class: "right"
 }
-const _hoisted_109 = { class: "tbl-wrap" }
-const _hoisted_110 = { class: "tbl" }
-const _hoisted_111 = /*#__PURE__*/_createElementVNode("thead", null, [
+const _hoisted_114 = { class: "tbl-wrap" }
+const _hoisted_115 = { class: "tbl" }
+const _hoisted_116 = /*#__PURE__*/_createElementVNode("thead", null, [
   /*#__PURE__*/_createElementVNode("tr", null, [
     /*#__PURE__*/_createElementVNode("th", null, "编号"),
     /*#__PURE__*/_createElementVNode("th", null, "名称"),
@@ -4357,45 +4415,45 @@ const _hoisted_111 = /*#__PURE__*/_createElementVNode("thead", null, [
     /*#__PURE__*/_createElementVNode("th", null, "时间")
   ])
 ], -1 /* HOISTED */)
-const _hoisted_112 = ["onClick"]
-const _hoisted_113 = { class: "mono" }
-const _hoisted_114 = {
+const _hoisted_117 = ["onClick"]
+const _hoisted_118 = { class: "mono" }
+const _hoisted_119 = {
   key: 0,
   class: "tag",
   style: {"margin-left":"6px"}
 }
-const _hoisted_115 = { class: "small" }
-const _hoisted_116 = { class: "r" }
-const _hoisted_117 = { class: "small" }
-const _hoisted_118 = { key: 0 }
-const _hoisted_119 = /*#__PURE__*/_createElementVNode("td", {
+const _hoisted_120 = { class: "small" }
+const _hoisted_121 = { class: "r" }
+const _hoisted_122 = { class: "small" }
+const _hoisted_123 = { key: 0 }
+const _hoisted_124 = /*#__PURE__*/_createElementVNode("td", {
   colspan: "8",
   class: "muted",
   style: {"text-align":"center","padding":"20px"}
 }, "当前项目还没有需求单", -1 /* HOISTED */)
-const _hoisted_120 = [
-  _hoisted_119
+const _hoisted_125 = [
+  _hoisted_124
 ]
-const _hoisted_121 = {
+const _hoisted_126 = {
   key: 0,
   class: "panel"
 }
-const _hoisted_122 = { class: "body stack" }
-const _hoisted_123 = { class: "muted small" }
-const _hoisted_124 = { class: "kv" }
-const _hoisted_125 = /*#__PURE__*/_createElementVNode("div", null, "使用范围", -1 /* HOISTED */)
-const _hoisted_126 = /*#__PURE__*/_createElementVNode("div", null, "管线模板", -1 /* HOISTED */)
-const _hoisted_127 = /*#__PURE__*/_createElementVNode("div", null, "单件预算", -1 /* HOISTED */)
-const _hoisted_128 = /*#__PURE__*/_createElementVNode("div", null, "进度", -1 /* HOISTED */)
-const _hoisted_129 = /*#__PURE__*/_createElementVNode("div", null, "任务", -1 /* HOISTED */)
-const _hoisted_130 = { class: "row" }
-const _hoisted_131 = {
+const _hoisted_127 = { class: "body stack" }
+const _hoisted_128 = { class: "muted small" }
+const _hoisted_129 = { class: "kv" }
+const _hoisted_130 = /*#__PURE__*/_createElementVNode("div", null, "使用范围", -1 /* HOISTED */)
+const _hoisted_131 = /*#__PURE__*/_createElementVNode("div", null, "管线模板", -1 /* HOISTED */)
+const _hoisted_132 = /*#__PURE__*/_createElementVNode("div", null, "单件预算", -1 /* HOISTED */)
+const _hoisted_133 = /*#__PURE__*/_createElementVNode("div", null, "进度", -1 /* HOISTED */)
+const _hoisted_134 = /*#__PURE__*/_createElementVNode("div", null, "任务", -1 /* HOISTED */)
+const _hoisted_135 = { class: "row" }
+const _hoisted_136 = {
   key: 1,
   class: "panel"
 }
-const _hoisted_132 = /*#__PURE__*/_createElementVNode("div", { class: "body muted" }, "选择一个需求单查看详情。", -1 /* HOISTED */)
-const _hoisted_133 = [
-  _hoisted_132
+const _hoisted_137 = /*#__PURE__*/_createElementVNode("div", { class: "body muted" }, "选择一个需求单查看详情。", -1 /* HOISTED */)
+const _hoisted_138 = [
+  _hoisted_137
 ]
 
 return function render(_ctx, _cache) {
@@ -4419,8 +4477,9 @@ return function render(_ctx, _cache) {
           ? (_openBlock(), _createElementBlock("button", {
               key: 0,
               class: "btn",
+              disabled: _ctx.uploadingRef,
               onClick: _cache[0] || (_cache[0] = $event => (_ctx.mode='list'))
-            }, "返回列表"))
+            }, "返回列表", 8 /* PROPS */, _hoisted_2))
           : (_openBlock(), _createElementBlock("button", {
               key: 1,
               class: "btn primary",
@@ -4432,8 +4491,8 @@ return function render(_ctx, _cache) {
     }),
     (_ctx.mode==='new')
       ? (_openBlock(), _createElementBlock(_Fragment, { key: 0 }, [
-          _createElementVNode("div", _hoisted_2, [
-            _createElementVNode("div", _hoisted_3, [
+          _createElementVNode("div", _hoisted_3, [
+            _createElementVNode("div", _hoisted_4, [
               _createVNode(_component_c_steps, {
                 steps: _ctx.stepNames,
                 cur: _ctx.step,
@@ -4442,14 +4501,14 @@ return function render(_ctx, _cache) {
               }, null, 8 /* PROPS */, ["steps", "cur"])
             ])
           ]),
-          _createElementVNode("div", _hoisted_4, [
-            _createElementVNode("div", _hoisted_5, [
-              _createElementVNode("div", _hoisted_6, [
+          _createElementVNode("div", _hoisted_5, [
+            _createElementVNode("div", _hoisted_6, [
+              _createElementVNode("div", _hoisted_7, [
                 (_ctx.step===0)
                   ? (_openBlock(), _createElementBlock(_Fragment, { key: 0 }, [
-                      _createElementVNode("div", _hoisted_7, [
-                        _createElementVNode("div", _hoisted_8, [
-                          _hoisted_9,
+                      _createElementVNode("div", _hoisted_8, [
+                        _createElementVNode("div", _hoisted_9, [
+                          _hoisted_10,
                           _withDirectives(_createElementVNode("input", {
                             id: "job-title",
                             class: "inp",
@@ -4459,8 +4518,8 @@ return function render(_ctx, _cache) {
                             [_vModelText, _ctx.f.title]
                           ])
                         ]),
-                        _createElementVNode("div", _hoisted_10, [
-                          _hoisted_11,
+                        _createElementVNode("div", _hoisted_11, [
+                          _hoisted_12,
                           _withDirectives(_createElementVNode("select", {
                             id: "job-project",
                             class: "inp",
@@ -4470,14 +4529,14 @@ return function render(_ctx, _cache) {
                               return (_openBlock(), _createElementBlock("option", {
                                 value: p.id,
                                 key: p.id
-                              }, _toDisplayString(p.name), 9 /* TEXT, PROPS */, _hoisted_12))
+                              }, _toDisplayString(p.name), 9 /* TEXT, PROPS */, _hoisted_13))
                             }), 128 /* KEYED_FRAGMENT */))
                           ], 512 /* NEED_PATCH */), [
                             [_vModelSelect, _ctx.f.project_id]
                           ])
                         ]),
-                        _createElementVNode("div", _hoisted_13, [
-                          _hoisted_14,
+                        _createElementVNode("div", _hoisted_14, [
+                          _hoisted_15,
                           _withDirectives(_createElementVNode("input", {
                             id: "job-qty",
                             class: "inp",
@@ -4494,28 +4553,41 @@ return function render(_ctx, _cache) {
                             ]
                           ])
                         ]),
-                        _createElementVNode("div", _hoisted_15, [
-                          _hoisted_16,
+                        _createElementVNode("div", _hoisted_16, [
+                          _createElementVNode("label", _hoisted_17, _toDisplayString(_ctx.st.production ? '上传参考图' : '参考图文件名演示'), 1 /* TEXT */),
                           _createElementVNode("input", {
                             id: "job-ref",
                             class: "inp",
                             type: "file",
-                            multiple: "",
-                            accept: "image/*",
+                            accept: ".png,.jpg,.jpeg,.webp",
+                            disabled: _ctx.uploadingRef,
                             onChange: _cache[6] || (_cache[6] = (...args) => (_ctx.onRef && _ctx.onRef(...args)))
-                          }, null, 32 /* NEED_HYDRATION */),
-                          (_ctx.f.ref_images.length)
-                            ? (_openBlock(), _createElementBlock("span", _hoisted_17, _toDisplayString(_ctx.f.ref_images.map(x=>x.name||x).join('、')), 1 /* TEXT */))
+                          }, null, 40 /* PROPS, NEED_HYDRATION */, _hoisted_18),
+                          _createElementVNode("span", _hoisted_19, _toDisplayString(_ctx.st.production ? '支持一张 PNG、JPEG 或 WebP，用于生成道具概念图。' : '当前是流程演示，仅记录文件名。真实生成请使用生产环境。'), 1 /* TEXT */),
+                          (_ctx.uploadingRef)
+                            ? (_openBlock(), _createElementBlock("span", _hoisted_20, "正在上传参考图…"))
+                            : (_ctx.f.ref_images.length)
+                              ? (_openBlock(), _createElementBlock("span", _hoisted_21, [
+                                  _createTextVNode(_toDisplayString(_ctx.st.production ? '已上传' : '已记录文件名') + "：" + _toDisplayString(_ctx.f.ref_images[0].name||_ctx.f.ref_images[0]) + " ", 1 /* TEXT */),
+                                  _createElementVNode("button", {
+                                    class: "btn sm",
+                                    type: "button",
+                                    onClick: _cache[7] || (_cache[7] = $event => {_ctx.f.ref_images=[];_ctx.refError=''})
+                                  }, "移除")
+                                ]))
+                              : _createCommentVNode("v-if", true),
+                          (_ctx.refError)
+                            ? (_openBlock(), _createElementBlock("span", _hoisted_22, _toDisplayString(_ctx.refError), 1 /* TEXT */))
                             : _createCommentVNode("v-if", true)
                         ])
                       ]),
-                      _createElementVNode("div", _hoisted_18, [
-                        _hoisted_19,
+                      _createElementVNode("div", _hoisted_23, [
+                        _hoisted_24,
                         _withDirectives(_createElementVNode("textarea", {
                           id: "job-desc",
                           class: "inp",
                           rows: "4",
-                          "onUpdate:modelValue": _cache[7] || (_cache[7] = $event => ((_ctx.f.description) = $event)),
+                          "onUpdate:modelValue": _cache[8] || (_cache[8] = $event => ((_ctx.f.description) = $event)),
                           placeholder: "例：商周风格青铜鼎与明清宫灯，陪衬展柜两侧，写实 PBR 材质"
                         }, null, 512 /* NEED_PATCH */), [
                           [_vModelText, _ctx.f.description]
@@ -4525,27 +4597,27 @@ return function render(_ctx, _cache) {
                   : _createCommentVNode("v-if", true),
                 (_ctx.step===1)
                   ? (_openBlock(), _createElementBlock(_Fragment, { key: 1 }, [
-                      _createElementVNode("div", _hoisted_20, [
-                        _hoisted_21,
-                        _createElementVNode("div", _hoisted_22, [
-                          _createElementVNode("label", _hoisted_23, [
+                      _createElementVNode("div", _hoisted_25, [
+                        _hoisted_26,
+                        _createElementVNode("div", _hoisted_27, [
+                          _createElementVNode("label", _hoisted_28, [
                             _withDirectives(_createElementVNode("input", {
                               type: "radio",
                               name: "her",
                               value: false,
-                              "onUpdate:modelValue": _cache[8] || (_cache[8] = $event => ((_ctx.f.is_heritage) = $event)),
+                              "onUpdate:modelValue": _cache[9] || (_cache[9] = $event => ((_ctx.f.is_heritage) = $event)),
                               id: "her-no"
                             }, null, 512 /* NEED_PATCH */), [
                               [_vModelRadio, _ctx.f.is_heritage]
                             ]),
                             _createTextVNode("否")
                           ]),
-                          _createElementVNode("label", _hoisted_24, [
+                          _createElementVNode("label", _hoisted_29, [
                             _withDirectives(_createElementVNode("input", {
                               type: "radio",
                               name: "her",
                               value: true,
-                              "onUpdate:modelValue": _cache[9] || (_cache[9] = $event => ((_ctx.f.is_heritage) = $event)),
+                              "onUpdate:modelValue": _cache[10] || (_cache[10] = $event => ((_ctx.f.is_heritage) = $event)),
                               id: "her-yes"
                             }, null, 512 /* NEED_PATCH */), [
                               [_vModelRadio, _ctx.f.is_heritage]
@@ -4555,11 +4627,11 @@ return function render(_ctx, _cache) {
                         ])
                       ]),
                       (_ctx.f.is_heritage)
-                        ? (_openBlock(), _createElementBlock("div", _hoisted_25, "文物本体只能使用实景重建模板，生成类节点不可用。内容类型已锁定为“实景重建”。"))
+                        ? (_openBlock(), _createElementBlock("div", _hoisted_30, "文物本体只能使用实景重建模板，生成类节点不可用。内容类型已锁定为“实景重建”。"))
                         : _createCommentVNode("v-if", true),
-                      _createElementVNode("div", _hoisted_26, [
-                        _hoisted_27,
-                        _createElementVNode("div", _hoisted_28, [
+                      _createElementVNode("div", _hoisted_31, [
+                        _hoisted_32,
+                        _createElementVNode("div", _hoisted_33, [
                           (_openBlock(true), _createElementBlock(_Fragment, null, _renderList(_ctx.D.CONTENT_TYPES, (n, k) => {
                             return (_openBlock(), _createElementBlock("label", {
                               key: k,
@@ -4570,10 +4642,10 @@ return function render(_ctx, _cache) {
                                 type: "radio",
                                 name: "ct",
                                 value: k,
-                                "onUpdate:modelValue": _cache[10] || (_cache[10] = $event => ((_ctx.f.content_type) = $event)),
+                                "onUpdate:modelValue": _cache[11] || (_cache[11] = $event => ((_ctx.f.content_type) = $event)),
                                 disabled: _ctx.f.is_heritage && k!=='recon',
                                 id: 'ct-'+k
-                              }, null, 8 /* PROPS */, _hoisted_29), [
+                              }, null, 8 /* PROPS */, _hoisted_34), [
                                 [_vModelRadio, _ctx.f.content_type]
                               ]),
                               _createTextVNode(_toDisplayString(n), 1 /* TEXT */)
@@ -4581,41 +4653,41 @@ return function render(_ctx, _cache) {
                           }), 128 /* KEYED_FRAGMENT */))
                         ])
                       ]),
-                      _createElementVNode("div", _hoisted_30, [
-                        _createElementVNode("div", _hoisted_31, [
-                          _hoisted_32,
+                      _createElementVNode("div", _hoisted_35, [
+                        _createElementVNode("div", _hoisted_36, [
+                          _hoisted_37,
                           _withDirectives(_createElementVNode("select", {
                             id: "job-scope",
                             class: "inp",
-                            "onUpdate:modelValue": _cache[11] || (_cache[11] = $event => ((_ctx.f.usage_scope) = $event))
+                            "onUpdate:modelValue": _cache[12] || (_cache[12] = $event => ((_ctx.f.usage_scope) = $event))
                           }, [
                             (_openBlock(true), _createElementBlock(_Fragment, null, _renderList(_ctx.D.SCOPES, (n, k) => {
                               return (_openBlock(), _createElementBlock("option", {
                                 value: k,
                                 key: k
-                              }, _toDisplayString(n), 9 /* TEXT, PROPS */, _hoisted_33))
+                              }, _toDisplayString(n), 9 /* TEXT, PROPS */, _hoisted_38))
                             }), 128 /* KEYED_FRAGMENT */))
                           ], 512 /* NEED_PATCH */), [
                             [_vModelSelect, _ctx.f.usage_scope]
                           ]),
-                          _hoisted_34
+                          _hoisted_39
                         ]),
-                        _createElementVNode("div", _hoisted_35, [
-                          _hoisted_36,
+                        _createElementVNode("div", _hoisted_40, [
+                          _hoisted_41,
                           _withDirectives(_createElementVNode("select", {
                             id: "job-lora",
                             class: "inp",
-                            "onUpdate:modelValue": _cache[12] || (_cache[12] = $event => ((_ctx.f.style_lora) = $event)),
+                            "onUpdate:modelValue": _cache[13] || (_cache[13] = $event => ((_ctx.f.style_lora) = $event)),
                             disabled: _ctx.f.is_heritage
                           }, [
-                            _hoisted_38,
+                            _hoisted_43,
                             (_openBlock(true), _createElementBlock(_Fragment, null, _renderList(_ctx.loras, (m) => {
                               return (_openBlock(), _createElementBlock("option", {
                                 value: m.id,
                                 key: m.id
-                              }, _toDisplayString(m.name) + "（" + _toDisplayString(m.license_type) + "）", 9 /* TEXT, PROPS */, _hoisted_39))
+                              }, _toDisplayString(m.name) + "（" + _toDisplayString(m.license_type) + "）", 9 /* TEXT, PROPS */, _hoisted_44))
                             }), 128 /* KEYED_FRAGMENT */))
-                          ], 8 /* PROPS */, _hoisted_37), [
+                          ], 8 /* PROPS */, _hoisted_42), [
                             [_vModelSelect, _ctx.f.style_lora]
                           ])
                         ])
@@ -4624,9 +4696,9 @@ return function render(_ctx, _cache) {
                   : _createCommentVNode("v-if", true),
                 (_ctx.step===2)
                   ? (_openBlock(), _createElementBlock(_Fragment, { key: 2 }, [
-                      _createElementVNode("div", _hoisted_40, [
-                        _hoisted_41,
-                        _createElementVNode("div", _hoisted_42, [
+                      _createElementVNode("div", _hoisted_45, [
+                        _hoisted_46,
+                        _createElementVNode("div", _hoisted_47, [
                           (_openBlock(true), _createElementBlock(_Fragment, null, _renderList(_ctx.D.PLATFORMS, (n, k) => {
                             return (_openBlock(), _createElementBlock("label", {
                               key: k,
@@ -4638,15 +4710,15 @@ return function render(_ctx, _cache) {
                                 checked: _ctx.f.platforms.includes(k),
                                 onChange: $event => (_ctx.togglePlat(k)),
                                 id: 'plat-'+k
-                              }, null, 40 /* PROPS, NEED_HYDRATION */, _hoisted_43),
+                              }, null, 40 /* PROPS, NEED_HYDRATION */, _hoisted_48),
                               _createTextVNode(_toDisplayString(n), 1 /* TEXT */)
                             ]))
                           }), 128 /* KEYED_FRAGMENT */))
                         ])
                       ]),
-                      _createElementVNode("div", _hoisted_44, [
-                        _createElementVNode("table", _hoisted_45, [
-                          _hoisted_46,
+                      _createElementVNode("div", _hoisted_49, [
+                        _createElementVNode("table", _hoisted_50, [
+                          _hoisted_51,
                           _createElementVNode("tbody", null, [
                             (_openBlock(true), _createElementBlock(_Fragment, null, _renderList(_ctx.f.platforms, (p) => {
                               return (_openBlock(), _createElementBlock("tr", {
@@ -4655,12 +4727,12 @@ return function render(_ctx, _cache) {
                               }, [
                                 _createElementVNode("td", null, _toDisplayString(_ctx.D.PLATFORMS[p]), 1 /* TEXT */),
                                 _createElementVNode("td", null, _toDisplayString(_ctx.E.S.settings.presets[p].name), 1 /* TEXT */),
-                                _createElementVNode("td", _hoisted_47, "≤ " + _toDisplayString(_ctx.U.n(_ctx.E.S.settings.presets[p].tris)), 1 /* TEXT */),
-                                _createElementVNode("td", _hoisted_48, "≤ " + _toDisplayString(_ctx.E.S.settings.presets[p].tex), 1 /* TEXT */),
-                                _createElementVNode("td", _hoisted_49, _toDisplayString(_ctx.E.S.settings.presets[p].materials), 1 /* TEXT */),
-                                _createElementVNode("td", _hoisted_50, _toDisplayString(_ctx.U.n(_ctx.E.S.settings.presets[p].scene_tris)), 1 /* TEXT */),
-                                _createElementVNode("td", _hoisted_51, _toDisplayString(_ctx.E.S.settings.presets[p].drawcalls), 1 /* TEXT */),
-                                _createElementVNode("td", _hoisted_52, _toDisplayString(_ctx.E.S.settings.presets[p].src), 1 /* TEXT */)
+                                _createElementVNode("td", _hoisted_52, "≤ " + _toDisplayString(_ctx.U.n(_ctx.E.S.settings.presets[p].tris)), 1 /* TEXT */),
+                                _createElementVNode("td", _hoisted_53, "≤ " + _toDisplayString(_ctx.E.S.settings.presets[p].tex), 1 /* TEXT */),
+                                _createElementVNode("td", _hoisted_54, _toDisplayString(_ctx.E.S.settings.presets[p].materials), 1 /* TEXT */),
+                                _createElementVNode("td", _hoisted_55, _toDisplayString(_ctx.U.n(_ctx.E.S.settings.presets[p].scene_tris)), 1 /* TEXT */),
+                                _createElementVNode("td", _hoisted_56, _toDisplayString(_ctx.E.S.settings.presets[p].drawcalls), 1 /* TEXT */),
+                                _createElementVNode("td", _hoisted_57, _toDisplayString(_ctx.E.S.settings.presets[p].src), 1 /* TEXT */)
                               ], 2 /* CLASS */))
                             }), 128 /* KEYED_FRAGMENT */))
                           ])
@@ -4670,14 +4742,14 @@ return function render(_ctx, _cache) {
                   : _createCommentVNode("v-if", true),
                 (_ctx.step===3 && _ctx.pre)
                   ? (_openBlock(), _createElementBlock(_Fragment, { key: 3 }, [
-                      _createElementVNode("div", _hoisted_53, [
+                      _createElementVNode("div", _hoisted_58, [
                         _createElementVNode("b", null, _toDisplayString(_ctx.pre.template_name), 1 /* TEXT */),
-                        _createElementVNode("span", _hoisted_54, _toDisplayString(_ctx.pre.template), 1 /* TEXT */),
-                        _hoisted_55
+                        _createElementVNode("span", _hoisted_59, _toDisplayString(_ctx.pre.template), 1 /* TEXT */),
+                        _hoisted_60
                       ]),
-                      _createElementVNode("div", _hoisted_56, [
-                        _createElementVNode("table", _hoisted_57, [
-                          _hoisted_58,
+                      _createElementVNode("div", _hoisted_61, [
+                        _createElementVNode("table", _hoisted_62, [
+                          _hoisted_63,
                           _createElementVNode("tbody", null, [
                             (_openBlock(true), _createElementBlock(_Fragment, null, _renderList(_ctx.pre.nodes, (n) => {
                               return (_openBlock(), _createElementBlock("tr", {
@@ -4686,11 +4758,11 @@ return function render(_ctx, _cache) {
                                 _createElementVNode("td", null, [
                                   _createTextVNode(_toDisplayString(n.name), 1 /* TEXT */),
                                   (n.human)
-                                    ? (_openBlock(), _createElementBlock("span", _hoisted_59, "人工节点"))
+                                    ? (_openBlock(), _createElementBlock("span", _hoisted_64, "人工节点"))
                                     : _createCommentVNode("v-if", true)
                                 ]),
                                 _createElementVNode("td", null, [
-                                  (!n.human && n.model && _ctx.nodeOptions(n.type).length>1)
+                                  (!_ctx.st.production && !n.human && n.model && _ctx.nodeOptions(n.type).length>1)
                                     ? (_openBlock(), _createElementBlock("select", {
                                         key: 0,
                                         class: "inp",
@@ -4703,16 +4775,16 @@ return function render(_ctx, _cache) {
                                             key: o.m.id,
                                             value: o.m.id,
                                             disabled: !o.ok
-                                          }, _toDisplayString(o.m.name) + _toDisplayString(o.ok ? '' : '（不可用：'+o.reason+'）'), 9 /* TEXT, PROPS */, _hoisted_61))
+                                          }, _toDisplayString(o.m.name) + _toDisplayString(o.ok ? '' : '（不可用：'+o.reason+'）'), 9 /* TEXT, PROPS */, _hoisted_66))
                                         }), 128 /* KEYED_FRAGMENT */))
-                                      ], 40 /* PROPS, NEED_HYDRATION */, _hoisted_60))
+                                      ], 40 /* PROPS, NEED_HYDRATION */, _hoisted_65))
                                     : (_openBlock(), _createElementBlock(_Fragment, { key: 1 }, [
                                         _createTextVNode(_toDisplayString(n.model_name || (n.human ? '—' : '无可用模型')), 1 /* TEXT */)
                                       ], 64 /* STABLE_FRAGMENT */))
                                 ]),
                                 _createElementVNode("td", null, _toDisplayString(n.queue || '—'), 1 /* TEXT */),
-                                _createElementVNode("td", _hoisted_62, _toDisplayString(n.vram ? n.vram+' GB' : '—'), 1 /* TEXT */),
-                                _createElementVNode("td", _hoisted_63, _toDisplayString(n.unit_s ? _ctx.U.dur(n.unit_s) : '—'), 1 /* TEXT */)
+                                _createElementVNode("td", _hoisted_67, _toDisplayString(n.vram ? n.vram+' GB' : '—'), 1 /* TEXT */),
+                                _createElementVNode("td", _hoisted_68, _toDisplayString(n.unit_s ? _ctx.U.dur(n.unit_s) : '—'), 1 /* TEXT */)
                               ]))
                             }), 128 /* KEYED_FRAGMENT */))
                           ])
@@ -4722,55 +4794,55 @@ return function render(_ctx, _cache) {
                   : _createCommentVNode("v-if", true),
                 (_ctx.step===4 && _ctx.pre)
                   ? (_openBlock(), _createElementBlock(_Fragment, { key: 4 }, [
-                      _createElementVNode("div", _hoisted_64, [
-                        _hoisted_65,
-                        _createElementVNode("div", null, _toDisplayString(_ctx.f.title), 1 /* TEXT */),
-                        _hoisted_66,
-                        _createElementVNode("div", null, _toDisplayString(_ctx.E.project(_ctx.f.project_id).name), 1 /* TEXT */),
-                        _hoisted_67,
-                        _createElementVNode("div", null, _toDisplayString(_ctx.D.SCOPES[_ctx.f.usage_scope]), 1 /* TEXT */),
-                        _hoisted_68,
-                        _createElementVNode("div", null, _toDisplayString(_ctx.D.CONTENT_TYPES[_ctx.pre.content_type]), 1 /* TEXT */),
-                        _hoisted_69,
-                        _createElementVNode("div", null, _toDisplayString(_ctx.f.is_heritage ? '是' : '否'), 1 /* TEXT */),
+                      _createElementVNode("div", _hoisted_69, [
                         _hoisted_70,
-                        _createElementVNode("div", null, _toDisplayString(_ctx.f.platforms.map(p=>_ctx.D.PLATFORMS[p]).join('、')), 1 /* TEXT */),
+                        _createElementVNode("div", null, _toDisplayString(_ctx.f.title), 1 /* TEXT */),
                         _hoisted_71,
-                        _createElementVNode("div", null, _toDisplayString(_ctx.f.quantity) + " 件", 1 /* TEXT */),
+                        _createElementVNode("div", null, _toDisplayString(_ctx.E.project(_ctx.f.project_id).name), 1 /* TEXT */),
                         _hoisted_72,
+                        _createElementVNode("div", null, _toDisplayString(_ctx.D.SCOPES[_ctx.f.usage_scope]), 1 /* TEXT */),
+                        _hoisted_73,
+                        _createElementVNode("div", null, _toDisplayString(_ctx.D.CONTENT_TYPES[_ctx.pre.content_type]), 1 /* TEXT */),
+                        _hoisted_74,
+                        _createElementVNode("div", null, _toDisplayString(_ctx.f.is_heritage ? '是' : '否'), 1 /* TEXT */),
+                        _hoisted_75,
+                        _createElementVNode("div", null, _toDisplayString(_ctx.f.platforms.map(p=>_ctx.D.PLATFORMS[p]).join('、')), 1 /* TEXT */),
+                        _hoisted_76,
+                        _createElementVNode("div", null, _toDisplayString(_ctx.f.quantity) + " 件", 1 /* TEXT */),
+                        _hoisted_77,
                         _createElementVNode("div", null, _toDisplayString(_ctx.pre.preset_name) + "（≤ " + _toDisplayString(_ctx.U.n(_ctx.pre.budget.tris)) + " 三角形）", 1 /* TEXT */)
                       ]),
                       (!_ctx.pre.ok)
-                        ? (_openBlock(), _createElementBlock("div", _hoisted_73, "不能提交：" + _toDisplayString(_ctx.pre.blocked.join('；')), 1 /* TEXT */))
+                        ? (_openBlock(), _createElementBlock("div", _hoisted_78, "不能提交：" + _toDisplayString(_ctx.pre.blocked.join('；')), 1 /* TEXT */))
                         : _createCommentVNode("v-if", true),
-                      _createElementVNode("div", _hoisted_74, [
+                      _createElementVNode("div", _hoisted_79, [
                         _createElementVNode("button", {
                           class: "btn",
-                          onClick: _cache[13] || (_cache[13] = $event => (_ctx.save(false))),
+                          onClick: _cache[14] || (_cache[14] = $event => (_ctx.save(false))),
                           id: "btn-save-draft"
                         }, "存为草稿"),
                         _createElementVNode("button", {
                           class: "btn primary",
-                          onClick: _cache[14] || (_cache[14] = $event => (_ctx.save(true))),
+                          onClick: _cache[15] || (_cache[15] = $event => (_ctx.save(true))),
                           disabled: !_ctx.pre.ok && _ctx.E.S.settings.rules.submitCheck,
                           id: "btn-submit-job"
-                        }, "确认提交", 8 /* PROPS */, _hoisted_75)
+                        }, "确认提交", 8 /* PROPS */, _hoisted_80)
                       ])
                     ], 64 /* STABLE_FRAGMENT */))
                   : _createCommentVNode("v-if", true),
                 (_ctx.step<4)
-                  ? (_openBlock(), _createElementBlock("div", _hoisted_76, [
-                      _hoisted_77,
+                  ? (_openBlock(), _createElementBlock("div", _hoisted_81, [
+                      _hoisted_82,
                       (_ctx.step>0)
                         ? (_openBlock(), _createElementBlock("button", {
                             key: 0,
                             class: "btn",
-                            onClick: _cache[15] || (_cache[15] = $event => (_ctx.step--))
+                            onClick: _cache[16] || (_cache[16] = $event => (_ctx.step--))
                           }, "上一步"))
                         : _createCommentVNode("v-if", true),
                       _createElementVNode("button", {
                         class: "btn primary",
-                        onClick: _cache[16] || (_cache[16] = (...args) => (_ctx.next && _ctx.next(...args))),
+                        onClick: _cache[17] || (_cache[17] = (...args) => (_ctx.next && _ctx.next(...args))),
                         id: "btn-next"
                       }, "下一步")
                     ]))
@@ -4778,10 +4850,10 @@ return function render(_ctx, _cache) {
               ])
             ]),
             (_ctx.pre)
-              ? (_openBlock(), _createElementBlock("div", _hoisted_78, [
-                  _createElementVNode("div", _hoisted_79, [
-                    _hoisted_80,
-                    _createElementVNode("div", _hoisted_81, [
+              ? (_openBlock(), _createElementBlock("div", _hoisted_83, [
+                  _createElementVNode("div", _hoisted_84, [
+                    _hoisted_85,
+                    _createElementVNode("div", _hoisted_86, [
                       (_openBlock(true), _createElementBlock(_Fragment, null, _renderList(_ctx.pre.nodes, (n) => {
                         return (_openBlock(), _createElementBlock("div", {
                           key: n.id,
@@ -4790,11 +4862,11 @@ return function render(_ctx, _cache) {
                         }, [
                           _createElementVNode("span", null, [
                             (n.human)
-                              ? (_openBlock(), _createElementBlock("span", _hoisted_82, "人工"))
+                              ? (_openBlock(), _createElementBlock("span", _hoisted_87, "人工"))
                               : _createCommentVNode("v-if", true),
                             _createTextVNode(" " + _toDisplayString(n.name), 1 /* TEXT */)
                           ]),
-                          _createElementVNode("span", _hoisted_83, [
+                          _createElementVNode("span", _hoisted_88, [
                             _createTextVNode(_toDisplayString(n.model_name || (n.human?'':'—')), 1 /* TEXT */),
                             (n.vram)
                               ? (_openBlock(), _createElementBlock(_Fragment, { key: 0 }, [
@@ -4809,34 +4881,34 @@ return function render(_ctx, _cache) {
                           ])
                         ]))
                       }), 128 /* KEYED_FRAGMENT */)),
-                      _hoisted_84,
-                      _createElementVNode("div", _hoisted_85, [
-                        _hoisted_86,
-                        _createElementVNode("div", _hoisted_87, [
-                          _createElementVNode("b", null, _toDisplayString(_ctx.U.dur(_ctx.pre.est_gpu_s)), 1 /* TEXT */),
-                          _createElementVNode("span", _hoisted_88, "（" + _toDisplayString(_ctx.f.quantity) + " × 各 GPU 节点单件耗时之和）", 1 /* TEXT */)
-                        ]),
-                        _hoisted_89,
-                        _createElementVNode("div", _hoisted_90, _toDisplayString(_ctx.U.dur(_ctx.pre.est_total_s)), 1 /* TEXT */),
+                      _hoisted_89,
+                      _createElementVNode("div", _hoisted_90, [
                         _hoisted_91,
+                        _createElementVNode("div", _hoisted_92, [
+                          _createElementVNode("b", null, _toDisplayString(_ctx.U.dur(_ctx.pre.est_gpu_s)), 1 /* TEXT */),
+                          _createElementVNode("span", _hoisted_93, "（" + _toDisplayString(_ctx.f.quantity) + " × 各 GPU 节点单件耗时之和）", 1 /* TEXT */)
+                        ]),
+                        _hoisted_94,
+                        _createElementVNode("div", _hoisted_95, _toDisplayString(_ctx.U.dur(_ctx.pre.est_total_s)), 1 /* TEXT */),
+                        _hoisted_96,
                         _createElementVNode("div", null, _toDisplayString(_ctx.pre.humanGates) + " 个", 1 /* TEXT */),
-                        _hoisted_92,
+                        _hoisted_97,
                         _createElementVNode("div", null, _toDisplayString(_ctx.pre.peak_vram) + " GB", 1 /* TEXT */),
-                        _hoisted_93,
+                        _hoisted_98,
                         _createElementVNode("div", null, _toDisplayString(_ctx.pre.preset_name) + " · ≤ " + _toDisplayString(_ctx.U.n(_ctx.pre.budget.tris)) + " 三角形 · " + _toDisplayString(_ctx.pre.budget.tex) + " 贴图", 1 /* TEXT */)
                       ])
                     ])
                   ]),
-                  _createElementVNode("div", _hoisted_94, [
+                  _createElementVNode("div", _hoisted_99, [
                     _createElementVNode("header", null, [
-                      _hoisted_95,
+                      _hoisted_100,
                       _createVNode(_component_c_pill, {
                         kind: _ctx.pre.ok ? 'ok' : 'err',
                         text: _ctx.pre.ok ? '通过' : '不通过'
                       }, null, 8 /* PROPS */, ["kind", "text"])
                     ]),
-                    _createElementVNode("div", _hoisted_96, [
-                      _createElementVNode("div", _hoisted_97, "使用范围：" + _toDisplayString(_ctx.D.SCOPES[_ctx.f.usage_scope]), 1 /* TEXT */),
+                    _createElementVNode("div", _hoisted_101, [
+                      _createElementVNode("div", _hoisted_102, "使用范围：" + _toDisplayString(_ctx.D.SCOPES[_ctx.f.usage_scope]), 1 /* TEXT */),
                       (_openBlock(true), _createElementBlock(_Fragment, null, _renderList(_ctx.pre.blocked, (b) => {
                         return (_openBlock(), _createElementBlock("div", {
                           key: b,
@@ -4844,8 +4916,8 @@ return function render(_ctx, _cache) {
                         }, _toDisplayString(b), 1 /* TEXT */))
                       }), 128 /* KEYED_FRAGMENT */)),
                       (_ctx.pre.excluded.length)
-                        ? (_openBlock(), _createElementBlock("div", _hoisted_98, [
-                            _hoisted_99,
+                        ? (_openBlock(), _createElementBlock("div", _hoisted_103, [
+                            _hoisted_104,
                             (_openBlock(true), _createElementBlock(_Fragment, null, _renderList(_ctx.pre.excluded, (x) => {
                               return (_openBlock(), _createElementBlock("div", {
                                 key: x.model+x.node,
@@ -4854,36 +4926,36 @@ return function render(_ctx, _cache) {
                               }, [
                                 _createElementVNode("b", null, _toDisplayString(x.model), 1 /* TEXT */),
                                 _createTextVNode(),
-                                _createElementVNode("span", _hoisted_100, _toDisplayString(x.node), 1 /* TEXT */),
-                                _hoisted_101,
-                                _createElementVNode("span", _hoisted_102, _toDisplayString(x.reason), 1 /* TEXT */)
+                                _createElementVNode("span", _hoisted_105, _toDisplayString(x.node), 1 /* TEXT */),
+                                _hoisted_106,
+                                _createElementVNode("span", _hoisted_107, _toDisplayString(x.reason), 1 /* TEXT */)
                               ]))
                             }), 128 /* KEYED_FRAGMENT */))
                           ]))
-                        : (_openBlock(), _createElementBlock("div", _hoisted_103, "没有被排除的模型"))
+                        : (_openBlock(), _createElementBlock("div", _hoisted_108, "没有被排除的模型"))
                     ])
                   ])
                 ]))
               : _createCommentVNode("v-if", true)
           ])
         ], 64 /* STABLE_FRAGMENT */))
-      : (_openBlock(), _createElementBlock("div", _hoisted_104, [
-          _createElementVNode("div", _hoisted_105, [
+      : (_openBlock(), _createElementBlock("div", _hoisted_109, [
+          _createElementVNode("div", _hoisted_110, [
             _createElementVNode("header", null, [
-              _hoisted_106,
-              _createElementVNode("span", _hoisted_107, _toDisplayString(_ctx.E.project().name), 1 /* TEXT */),
+              _hoisted_111,
+              _createElementVNode("span", _hoisted_112, _toDisplayString(_ctx.E.project().name), 1 /* TEXT */),
               (_ctx.st.params.filter)
-                ? (_openBlock(), _createElementBlock("span", _hoisted_108, [
+                ? (_openBlock(), _createElementBlock("span", _hoisted_113, [
                     _createElementVNode("button", {
                       class: "btn sm ghost",
-                      onClick: _cache[17] || (_cache[17] = $event => (_ctx.st.params={}))
+                      onClick: _cache[18] || (_cache[18] = $event => (_ctx.st.params={}))
                     }, "清除筛选")
                   ]))
                 : _createCommentVNode("v-if", true)
             ]),
-            _createElementVNode("div", _hoisted_109, [
-              _createElementVNode("table", _hoisted_110, [
-                _hoisted_111,
+            _createElementVNode("div", _hoisted_114, [
+              _createElementVNode("table", _hoisted_115, [
+                _hoisted_116,
                 _createElementVNode("tbody", null, [
                   (_openBlock(true), _createElementBlock(_Fragment, null, _renderList(_ctx.jobs, (j) => {
                     return (_openBlock(), _createElementBlock("tr", {
@@ -4891,16 +4963,16 @@ return function render(_ctx, _cache) {
                       class: _normalizeClass(["click", {sel: _ctx.sel===j.id}]),
                       onClick: $event => (_ctx.sel=j.id)
                     }, [
-                      _createElementVNode("td", _hoisted_113, _toDisplayString(j.code), 1 /* TEXT */),
+                      _createElementVNode("td", _hoisted_118, _toDisplayString(j.code), 1 /* TEXT */),
                       _createElementVNode("td", null, [
                         _createTextVNode(_toDisplayString(j.title), 1 /* TEXT */),
                         (j.is_heritage)
-                          ? (_openBlock(), _createElementBlock("span", _hoisted_114, "文物本体"))
+                          ? (_openBlock(), _createElementBlock("span", _hoisted_119, "文物本体"))
                           : _createCommentVNode("v-if", true)
                       ]),
                       _createElementVNode("td", null, _toDisplayString(_ctx.D.CONTENT_TYPES[j.content_type]), 1 /* TEXT */),
-                      _createElementVNode("td", _hoisted_115, _toDisplayString(j.platforms.map(p=>_ctx.D.PLATFORMS[p]).join('、')), 1 /* TEXT */),
-                      _createElementVNode("td", _hoisted_116, _toDisplayString(j.quantity), 1 /* TEXT */),
+                      _createElementVNode("td", _hoisted_120, _toDisplayString(j.platforms.map(p=>_ctx.D.PLATFORMS[p]).join('、')), 1 /* TEXT */),
+                      _createElementVNode("td", _hoisted_121, _toDisplayString(j.quantity), 1 /* TEXT */),
                       _createElementVNode("td", null, [
                         _createVNode(_component_c_pill, {
                           kind: _ctx.U.jobPill(j.status),
@@ -4908,18 +4980,18 @@ return function render(_ctx, _cache) {
                         }, null, 8 /* PROPS */, ["kind", "text"])
                       ]),
                       _createElementVNode("td", null, _toDisplayString(j.created_by), 1 /* TEXT */),
-                      _createElementVNode("td", _hoisted_117, _toDisplayString(_ctx.U.dt(j.created_at)), 1 /* TEXT */)
-                    ], 10 /* CLASS, PROPS */, _hoisted_112))
+                      _createElementVNode("td", _hoisted_122, _toDisplayString(_ctx.U.dt(j.created_at)), 1 /* TEXT */)
+                    ], 10 /* CLASS, PROPS */, _hoisted_117))
                   }), 128 /* KEYED_FRAGMENT */)),
                   (!_ctx.jobs.length)
-                    ? (_openBlock(), _createElementBlock("tr", _hoisted_118, _hoisted_120))
+                    ? (_openBlock(), _createElementBlock("tr", _hoisted_123, _hoisted_125))
                     : _createCommentVNode("v-if", true)
                 ])
               ])
             ])
           ]),
           (_ctx.cur)
-            ? (_openBlock(), _createElementBlock("div", _hoisted_121, [
+            ? (_openBlock(), _createElementBlock("div", _hoisted_126, [
                 _createElementVNode("header", null, [
                   _createElementVNode("h3", null, _toDisplayString(_ctx.cur.code), 1 /* TEXT */),
                   _createVNode(_component_c_pill, {
@@ -4927,38 +4999,38 @@ return function render(_ctx, _cache) {
                     text: _ctx.D.JOB_STATUS[_ctx.cur.status]
                   }, null, 8 /* PROPS */, ["kind", "text"])
                 ]),
-                _createElementVNode("div", _hoisted_122, [
+                _createElementVNode("div", _hoisted_127, [
                   _createElementVNode("b", null, _toDisplayString(_ctx.cur.title), 1 /* TEXT */),
-                  _createElementVNode("div", _hoisted_123, _toDisplayString(_ctx.cur.description), 1 /* TEXT */),
-                  _createElementVNode("div", _hoisted_124, [
-                    _hoisted_125,
+                  _createElementVNode("div", _hoisted_128, _toDisplayString(_ctx.cur.description), 1 /* TEXT */),
+                  _createElementVNode("div", _hoisted_129, [
+                    _hoisted_130,
                     _createElementVNode("div", null, _toDisplayString(_ctx.D.SCOPES[_ctx.cur.usage_scope || _ctx.E.project(_ctx.cur.project_id).usage_scope]), 1 /* TEXT */),
-                    _hoisted_126,
+                    _hoisted_131,
                     _createElementVNode("div", null, _toDisplayString(_ctx.cur.precheck ? _ctx.cur.precheck.template_name : '—'), 1 /* TEXT */),
-                    _hoisted_127,
+                    _hoisted_132,
                     _createElementVNode("div", null, _toDisplayString(_ctx.cur.precheck ? _ctx.cur.precheck.preset_name : '—'), 1 /* TEXT */),
-                    _hoisted_128,
+                    _hoisted_133,
                     _createElementVNode("div", null, _toDisplayString(_ctx.curAssets.filter(a=>['library','exported'].includes(a.status)).length) + " / " + _toDisplayString(_ctx.cur.quantity) + " 件入库", 1 /* TEXT */),
-                    _hoisted_129,
+                    _hoisted_134,
                     _createElementVNode("div", null, _toDisplayString(_ctx.curTasks.length) + " 个（运行 " + _toDisplayString(_ctx.curTasks.filter(t=>t.status==='running').length) + "）", 1 /* TEXT */)
                   ]),
                   _createVNode(_component_c_progress, {
                     v: _ctx.curAssets.filter(a=>['library','exported'].includes(a.status)).length / _ctx.cur.quantity
                   }, null, 8 /* PROPS */, ["v"]),
-                  _createElementVNode("div", _hoisted_130, [
+                  _createElementVNode("div", _hoisted_135, [
                     (_ctx.cur.status==='draft')
                       ? (_openBlock(), _createElementBlock(_Fragment, { key: 0 }, [
                           _createElementVNode("button", {
                             class: "btn",
-                            onClick: _cache[18] || (_cache[18] = $event => (_ctx.editDraft(_ctx.cur)))
+                            onClick: _cache[19] || (_cache[19] = $event => (_ctx.editDraft(_ctx.cur)))
                           }, "编辑"),
                           _createElementVNode("button", {
                             class: "btn primary",
-                            onClick: _cache[19] || (_cache[19] = $event => (_ctx.submitDraft(_ctx.cur)))
+                            onClick: _cache[20] || (_cache[20] = $event => (_ctx.submitDraft(_ctx.cur)))
                           }, "提交"),
                           _createElementVNode("button", {
                             class: "btn danger",
-                            onClick: _cache[20] || (_cache[20] = $event => {_ctx.act(()=>_ctx.E.deleteJob(_ctx.cur.id),'草稿已删除'); _ctx.sel=null})
+                            onClick: _cache[21] || (_cache[21] = $event => {_ctx.act(()=>_ctx.E.deleteJob(_ctx.cur.id),'草稿已删除'); _ctx.sel=null})
                           }, "删除")
                         ], 64 /* STABLE_FRAGMENT */))
                       : (_ctx.cur.status==='submitted' || _ctx.cur.status==='producing')
@@ -4967,26 +5039,26 @@ return function render(_ctx, _cache) {
                               ? (_openBlock(), _createElementBlock("button", {
                                   key: 0,
                                   class: "btn primary",
-                                  onClick: _cache[21] || (_cache[21] = $event => (_ctx.go('concepts',{job:_ctx.cur.id})))
+                                  onClick: _cache[22] || (_cache[22] = $event => (_ctx.go('concepts',{job:_ctx.cur.id})))
                                 }, "去选概念图"))
                               : _createCommentVNode("v-if", true),
                             (_ctx.cur.content_type==='recon')
                               ? (_openBlock(), _createElementBlock("button", {
                                   key: 1,
                                   class: "btn",
-                                  onClick: _cache[22] || (_cache[22] = $event => (_ctx.go('recon',{job:_ctx.cur.id})))
+                                  onClick: _cache[23] || (_cache[23] = $event => (_ctx.go('recon',{job:_ctx.cur.id})))
                                 }, "去实景重建"))
                               : _createCommentVNode("v-if", true),
                             _createElementVNode("button", {
                               class: "btn danger",
-                              onClick: _cache[23] || (_cache[23] = $event => (_ctx.act(()=>_ctx.E.cancelJob(_ctx.cur.id),'需求单已取消')))
+                              onClick: _cache[24] || (_cache[24] = $event => (_ctx.act(()=>_ctx.E.cancelJob(_ctx.cur.id),'需求单已取消')))
                             }, "取消")
                           ], 64 /* STABLE_FRAGMENT */))
                         : _createCommentVNode("v-if", true)
                   ])
                 ])
               ]))
-            : (_openBlock(), _createElementBlock("div", _hoisted_131, _hoisted_133))
+            : (_openBlock(), _createElementBlock("div", _hoisted_136, _hoisted_138))
         ]))
   ], 8 /* PROPS */, _hoisted_1))
 } })(),
@@ -7056,246 +7128,260 @@ return function render(_ctx, _cache) {
       const task = computed(() => { st.rev; return d.value && E.S.tasks.find(t => t.recon_id === d.value.id && ['queued', 'running'].includes(t.status)); });
       const psnr = reactive({}); watch(() => task.value && task.value.metrics && task.value.metrics.psnr, (v) => { if (v && d.value) { (psnr[d.value.id] = psnr[d.value.id] || []).push(v); } });
       const jobs = computed(() => { st.rev; return E.S.jobs.filter(j => j.project_id === E.S.currentProjectId && j.content_type === 'recon'); });
-      const nf = reactive({ name: '新展厅数据集', job_id: st.params.job || '', count: 0, sample: true });
-      const onFiles = (e) => { nf.count = e.target.files.length; nf.sample = false; };
-      const create = () => { const n = nf.sample ? 412 : nf.count; if (!n) return toast('请选择照片或使用示例素材集', 'err'); const r = act(() => E.createDataset({ name: nf.name, job_id: nf.job_id || null, photo_count: n, resolution: '6000×4000', device: nf.sample ? 'Sony A7R V + 24mm' : '本地上传', overlap: '约 75%' }), '素材已上传，已剔除模糊照片'); if (r) selId.value = r.id; };
+      const canRecon = computed(() => { st.rev; return E.can('recon'); });
+      const nf = reactive({ name: '新展厅数据集', job_id: st.params.job || '' });
+      const create = () => {
+        if (!canRecon.value) return;
+        const result = act(() => E.createDataset({ name: nf.name, job_id: nf.job_id || null, photo_count: 412, resolution: '6000×4000', device: 'Sony A7R V + 24mm', overlap: '约 75%' }), '已创建演示素材集');
+        if (result) selId.value = result.id;
+      };
       const est = computed(() => { if (!d.value) return 0; const m = E.model('lichtfeld'); return Math.round(m.unit_s * d.value.photo_count / 400 * d.value.iterations / 30000); });
       const mode = ref('auto');
       const train = () => act(() => E.trainGS(d.value.id, { iterations: d.value.iterations, sh: d.value.sh, splat_limit: d.value.splat_limit, platform: d.value.platform, mode: mode.value === 'auto' ? undefined : mode.value }), est.value > 3600 && mode.value === 'auto' ? '预计超过 60 分钟，已排入夜间窗口' : '已开始训练');
-      const patch = (path, v) => act(() => E.patch('recon', d.value.id, path, v));
+      const patch = (path, v) => canRecon.value && act(() => E.patch('recon', d.value.id, path, v));
       const stepNames = ['上传素材', '位姿求解', '3DGS 训练', '清理浮点', '导出'];
       const exportFmt = ref('spz');
       const doExport = () => { const r = act(() => E.finishRecon(d.value.id), (a) => `已导出并送入质检：${a.code}`); if (r) { const sp = Geo.buildSplats(Geo.hash(d.value.code), 20000, false, true); const head = `ply\nformat ascii 1.0\ncomment SpatialContentWorks 3DGS export (demo, ${sp.count} pts)\nelement vertex ${sp.count}\nproperty float x\nproperty float y\nproperty float z\nproperty uchar red\nproperty uchar green\nproperty uchar blue\nend_header\n`; let body = ''; for (let i = 0; i < sp.count; i++) body += `${sp.positions[i * 3].toFixed(3)} ${sp.positions[i * 3 + 1].toFixed(3)} ${sp.positions[i * 3 + 2].toFixed(3)} ${sp.colors[i * 3] * 255 | 0} ${sp.colors[i * 3 + 1] * 255 | 0} ${sp.colors[i * 3 + 2] * 255 | 0}\n`; if (exportFmt.value === 'ply') saveFile(d.value.code + '.ply', head + body, 'text/plain'); } };
       const capOk = computed(() => d.value && E.captureComplete(d.value));
-      return { patch, list, selId, d, el, vmode, shown, task, psnr, jobs, nf, onFiles, create, est, mode, train, stepNames, exportFmt, doExport, capOk, E, D, U, st, go, act };
+      return { patch, list, selId, d, el, vmode, shown, task, psnr, jobs, nf, canRecon, create, est, mode, train, stepNames, exportFmt, doExport, capOk, E, D, U, st, go, act };
     },
-    render: (function () { const { resolveComponent: _resolveComponent, createVNode: _createVNode, createElementVNode: _createElementVNode, openBlock: _openBlock, createElementBlock: _createElementBlock, createCommentVNode: _createCommentVNode, renderList: _renderList, Fragment: _Fragment, toDisplayString: _toDisplayString, normalizeClass: _normalizeClass, vModelText: _vModelText, withDirectives: _withDirectives, vModelSelect: _vModelSelect, vModelCheckbox: _vModelCheckbox, createTextVNode: _createTextVNode, normalizeStyle: _normalizeStyle } = Vue
+    render: (function () { const { resolveComponent: _resolveComponent, createVNode: _createVNode, createElementVNode: _createElementVNode, createTextVNode: _createTextVNode, openBlock: _openBlock, createElementBlock: _createElementBlock, createCommentVNode: _createCommentVNode, renderList: _renderList, Fragment: _Fragment, toDisplayString: _toDisplayString, normalizeClass: _normalizeClass, vModelText: _vModelText, withDirectives: _withDirectives, vModelSelect: _vModelSelect, normalizeStyle: _normalizeStyle } = Vue
 
 const _hoisted_1 = ["data-r"]
 const _hoisted_2 = {
+  class: "note",
+  style: {"margin-bottom":"12px"}
+}
+const _hoisted_3 = {
   key: 0,
   class: "panel",
   style: {"margin-bottom":"12px"}
 }
-const _hoisted_3 = { class: "body" }
-const _hoisted_4 = { class: "split3" }
-const _hoisted_5 = { class: "stack" }
-const _hoisted_6 = { class: "panel" }
-const _hoisted_7 = /*#__PURE__*/_createElementVNode("header", null, [
+const _hoisted_4 = { class: "body" }
+const _hoisted_5 = { class: "split3" }
+const _hoisted_6 = { class: "stack" }
+const _hoisted_7 = { class: "panel" }
+const _hoisted_8 = /*#__PURE__*/_createElementVNode("header", null, [
   /*#__PURE__*/_createElementVNode("h3", null, "素材集")
 ], -1 /* HOISTED */)
-const _hoisted_8 = { class: "list" }
-const _hoisted_9 = ["onClick"]
-const _hoisted_10 = { class: "grow" }
-const _hoisted_11 = { class: "t1" }
-const _hoisted_12 = { class: "t2" }
-const _hoisted_13 = { class: "body stack" }
-const _hoisted_14 = /*#__PURE__*/_createElementVNode("div", { class: "divider" }, null, -1 /* HOISTED */)
-const _hoisted_15 = /*#__PURE__*/_createElementVNode("b", { class: "small" }, "新建素材集", -1 /* HOISTED */)
-const _hoisted_16 = /*#__PURE__*/_createElementVNode("option", { value: "" }, "不关联需求单", -1 /* HOISTED */)
-const _hoisted_17 = ["value"]
-const _hoisted_18 = { class: "check small" }
-const _hoisted_19 = {
+const _hoisted_9 = { class: "list" }
+const _hoisted_10 = ["onClick"]
+const _hoisted_11 = { class: "grow" }
+const _hoisted_12 = { class: "t1" }
+const _hoisted_13 = { class: "t2" }
+const _hoisted_14 = { class: "body stack" }
+const _hoisted_15 = /*#__PURE__*/_createElementVNode("div", { class: "divider" }, null, -1 /* HOISTED */)
+const _hoisted_16 = /*#__PURE__*/_createElementVNode("b", { class: "small" }, "新建演示素材集", -1 /* HOISTED */)
+const _hoisted_17 = {
+  key: 0,
+  class: "faint small"
+}
+const _hoisted_18 = ["disabled"]
+const _hoisted_19 = ["disabled"]
+const _hoisted_20 = /*#__PURE__*/_createElementVNode("option", { value: "" }, "不关联需求单", -1 /* HOISTED */)
+const _hoisted_21 = ["value"]
+const _hoisted_22 = ["disabled"]
+const _hoisted_23 = {
   key: 0,
   class: "panel"
 }
-const _hoisted_20 = /*#__PURE__*/_createElementVNode("h3", null, "文博采集记录", -1 /* HOISTED */)
-const _hoisted_21 = { class: "body stack" }
-const _hoisted_22 = { class: "field" }
-const _hoisted_23 = /*#__PURE__*/_createElementVNode("label", { class: "req" }, "采集人", -1 /* HOISTED */)
-const _hoisted_24 = ["value"]
-const _hoisted_25 = { class: "field" }
-const _hoisted_26 = /*#__PURE__*/_createElementVNode("label", { class: "req" }, "采集日期", -1 /* HOISTED */)
-const _hoisted_27 = ["value"]
-const _hoisted_28 = { class: "field" }
-const _hoisted_29 = /*#__PURE__*/_createElementVNode("label", { class: "req" }, "标尺 / 控制点", -1 /* HOISTED */)
-const _hoisted_30 = ["value"]
-const _hoisted_31 = { class: "field" }
-const _hoisted_32 = /*#__PURE__*/_createElementVNode("label", { class: "req" }, "色卡", -1 /* HOISTED */)
-const _hoisted_33 = ["value"]
-const _hoisted_34 = { class: "kv small" }
-const _hoisted_35 = /*#__PURE__*/_createElementVNode("div", null, "精度报告", -1 /* HOISTED */)
-const _hoisted_36 = {
+const _hoisted_24 = /*#__PURE__*/_createElementVNode("h3", null, "文博采集记录", -1 /* HOISTED */)
+const _hoisted_25 = { class: "body stack" }
+const _hoisted_26 = { class: "field" }
+const _hoisted_27 = /*#__PURE__*/_createElementVNode("label", { class: "req" }, "采集人", -1 /* HOISTED */)
+const _hoisted_28 = ["value", "disabled"]
+const _hoisted_29 = { class: "field" }
+const _hoisted_30 = /*#__PURE__*/_createElementVNode("label", { class: "req" }, "采集日期", -1 /* HOISTED */)
+const _hoisted_31 = ["value", "disabled"]
+const _hoisted_32 = { class: "field" }
+const _hoisted_33 = /*#__PURE__*/_createElementVNode("label", { class: "req" }, "标尺 / 控制点", -1 /* HOISTED */)
+const _hoisted_34 = ["value", "disabled"]
+const _hoisted_35 = { class: "field" }
+const _hoisted_36 = /*#__PURE__*/_createElementVNode("label", { class: "req" }, "色卡", -1 /* HOISTED */)
+const _hoisted_37 = ["value", "disabled"]
+const _hoisted_38 = { class: "kv small" }
+const _hoisted_39 = /*#__PURE__*/_createElementVNode("div", null, "精度报告", -1 /* HOISTED */)
+const _hoisted_40 = {
   class: "stack",
   style: {"min-width":"0"}
 }
-const _hoisted_37 = {
+const _hoisted_41 = {
   class: "viewport",
   style: {"height":"460px"}
 }
-const _hoisted_38 = {
+const _hoisted_42 = {
   ref: "el",
   style: {"position":"absolute","inset":"0"}
 }
-const _hoisted_39 = {
+const _hoisted_43 = {
   key: 0,
   class: "vp-tools"
 }
-const _hoisted_40 = { class: "seg" }
-const _hoisted_41 = /*#__PURE__*/_createElementVNode("span", { class: "spacer" }, null, -1 /* HOISTED */)
-const _hoisted_42 = ["disabled"]
-const _hoisted_43 = ["disabled"]
-const _hoisted_44 = {
+const _hoisted_44 = { class: "seg" }
+const _hoisted_45 = /*#__PURE__*/_createElementVNode("span", { class: "spacer" }, null, -1 /* HOISTED */)
+const _hoisted_46 = ["disabled"]
+const _hoisted_47 = ["disabled"]
+const _hoisted_48 = {
   key: 1,
   class: "vp-overlay"
 }
-const _hoisted_45 = {
+const _hoisted_49 = {
   key: 2,
   class: "vp-empty"
 }
-const _hoisted_46 = {
+const _hoisted_50 = {
   key: 0,
   class: "panel"
 }
-const _hoisted_47 = /*#__PURE__*/_createElementVNode("header", null, [
+const _hoisted_51 = /*#__PURE__*/_createElementVNode("header", null, [
   /*#__PURE__*/_createElementVNode("h3", null, "素材统计")
 ], -1 /* HOISTED */)
-const _hoisted_48 = { class: "body" }
-const _hoisted_49 = { class: "grid g5 small" }
-const _hoisted_50 = /*#__PURE__*/_createElementVNode("div", { class: "lbl" }, "照片数", -1 /* HOISTED */)
-const _hoisted_51 = { class: "num" }
-const _hoisted_52 = /*#__PURE__*/_createElementVNode("div", { class: "lbl" }, "分辨率", -1 /* HOISTED */)
-const _hoisted_53 = /*#__PURE__*/_createElementVNode("div", { class: "lbl" }, "设备", -1 /* HOISTED */)
-const _hoisted_54 = /*#__PURE__*/_createElementVNode("div", { class: "lbl" }, "重叠度估计", -1 /* HOISTED */)
-const _hoisted_55 = /*#__PURE__*/_createElementVNode("div", { class: "lbl" }, "模糊剔除", -1 /* HOISTED */)
-const _hoisted_56 = { class: "num" }
-const _hoisted_57 = {
+const _hoisted_52 = { class: "body" }
+const _hoisted_53 = { class: "grid g5 small" }
+const _hoisted_54 = /*#__PURE__*/_createElementVNode("div", { class: "lbl" }, "照片数", -1 /* HOISTED */)
+const _hoisted_55 = { class: "num" }
+const _hoisted_56 = /*#__PURE__*/_createElementVNode("div", { class: "lbl" }, "分辨率", -1 /* HOISTED */)
+const _hoisted_57 = /*#__PURE__*/_createElementVNode("div", { class: "lbl" }, "设备", -1 /* HOISTED */)
+const _hoisted_58 = /*#__PURE__*/_createElementVNode("div", { class: "lbl" }, "重叠度估计", -1 /* HOISTED */)
+const _hoisted_59 = /*#__PURE__*/_createElementVNode("div", { class: "lbl" }, "模糊剔除", -1 /* HOISTED */)
+const _hoisted_60 = { class: "num" }
+const _hoisted_61 = {
   class: "row",
   style: {"margin-top":"10px"}
 }
-const _hoisted_58 = /*#__PURE__*/_createElementVNode("span", null, "相机注册率：", -1 /* HOISTED */)
-const _hoisted_59 = /*#__PURE__*/_createElementVNode("span", { class: "faint small" }, "（低于 90% 提示补拍，不进入训练）", -1 /* HOISTED */)
-const _hoisted_60 = /*#__PURE__*/_createElementVNode("span", { class: "spacer" }, null, -1 /* HOISTED */)
-const _hoisted_61 = {
+const _hoisted_62 = /*#__PURE__*/_createElementVNode("span", null, "相机注册率：", -1 /* HOISTED */)
+const _hoisted_63 = /*#__PURE__*/_createElementVNode("span", { class: "faint small" }, "（低于 90% 提示补拍，不进入训练）", -1 /* HOISTED */)
+const _hoisted_64 = /*#__PURE__*/_createElementVNode("span", { class: "spacer" }, null, -1 /* HOISTED */)
+const _hoisted_65 = {
   key: 1,
   class: "check small"
 }
-const _hoisted_62 = ["checked"]
-const _hoisted_63 = ["disabled"]
-const _hoisted_64 = {
+const _hoisted_66 = ["checked"]
+const _hoisted_67 = ["disabled"]
+const _hoisted_68 = {
   key: 0,
   class: "note warn",
   style: {"margin-top":"8px"}
 }
-const _hoisted_65 = {
+const _hoisted_69 = {
   key: 1,
   class: "panel"
 }
-const _hoisted_66 = /*#__PURE__*/_createElementVNode("header", null, [
-  /*#__PURE__*/_createElementVNode("h3", null, "精度报告")
+const _hoisted_70 = /*#__PURE__*/_createElementVNode("header", null, [
+  /*#__PURE__*/_createElementVNode("h3", null, "演示精度报告")
 ], -1 /* HOISTED */)
-const _hoisted_67 = { class: "body" }
-const _hoisted_68 = { class: "grid g5 small" }
-const _hoisted_69 = /*#__PURE__*/_createElementVNode("div", { class: "lbl" }, "重投影 RMSE", -1 /* HOISTED */)
-const _hoisted_70 = /*#__PURE__*/_createElementVNode("div", { class: "lbl" }, "尺度误差", -1 /* HOISTED */)
-const _hoisted_71 = /*#__PURE__*/_createElementVNode("div", { class: "lbl" }, "色差 ΔE", -1 /* HOISTED */)
-const _hoisted_72 = /*#__PURE__*/_createElementVNode("div", { class: "lbl" }, "PSNR", -1 /* HOISTED */)
-const _hoisted_73 = /*#__PURE__*/_createElementVNode("div", { class: "lbl" }, "控制点", -1 /* HOISTED */)
-const _hoisted_74 = {
+const _hoisted_71 = { class: "body" }
+const _hoisted_72 = { class: "grid g5 small" }
+const _hoisted_73 = /*#__PURE__*/_createElementVNode("div", { class: "lbl" }, "重投影 RMSE", -1 /* HOISTED */)
+const _hoisted_74 = /*#__PURE__*/_createElementVNode("div", { class: "lbl" }, "尺度误差", -1 /* HOISTED */)
+const _hoisted_75 = /*#__PURE__*/_createElementVNode("div", { class: "lbl" }, "色差 ΔE", -1 /* HOISTED */)
+const _hoisted_76 = /*#__PURE__*/_createElementVNode("div", { class: "lbl" }, "PSNR", -1 /* HOISTED */)
+const _hoisted_77 = /*#__PURE__*/_createElementVNode("div", { class: "lbl" }, "控制点", -1 /* HOISTED */)
+const _hoisted_78 = {
   key: 0,
   class: "stack"
 }
-const _hoisted_75 = { class: "panel" }
-const _hoisted_76 = /*#__PURE__*/_createElementVNode("header", null, [
+const _hoisted_79 = { class: "panel" }
+const _hoisted_80 = /*#__PURE__*/_createElementVNode("header", null, [
   /*#__PURE__*/_createElementVNode("h3", null, "训练参数")
 ], -1 /* HOISTED */)
-const _hoisted_77 = { class: "body stack" }
-const _hoisted_78 = { class: "grid g2" }
-const _hoisted_79 = { class: "field" }
-const _hoisted_80 = /*#__PURE__*/_createElementVNode("label", null, "位姿求解", -1 /* HOISTED */)
-const _hoisted_81 = ["value"]
-const _hoisted_82 = /*#__PURE__*/_createElementVNode("option", { value: "colmap" }, "COLMAP", -1 /* HOISTED */)
-const _hoisted_83 = [
-  _hoisted_82
+const _hoisted_81 = { class: "body stack" }
+const _hoisted_82 = { class: "grid g2" }
+const _hoisted_83 = { class: "field" }
+const _hoisted_84 = /*#__PURE__*/_createElementVNode("label", null, "位姿求解", -1 /* HOISTED */)
+const _hoisted_85 = ["value", "disabled"]
+const _hoisted_86 = /*#__PURE__*/_createElementVNode("option", { value: "colmap" }, "COLMAP", -1 /* HOISTED */)
+const _hoisted_87 = [
+  _hoisted_86
 ]
-const _hoisted_84 = { class: "field" }
-const _hoisted_85 = /*#__PURE__*/_createElementVNode("label", null, "训练引擎", -1 /* HOISTED */)
-const _hoisted_86 = ["value"]
-const _hoisted_87 = /*#__PURE__*/_createElementVNode("option", { value: "lichtfeld" }, "LichtFeld Studio CLI", -1 /* HOISTED */)
-const _hoisted_88 = /*#__PURE__*/_createElementVNode("option", { value: "gsplat" }, "gsplat", -1 /* HOISTED */)
-const _hoisted_89 = [
-  _hoisted_87,
-  _hoisted_88
+const _hoisted_88 = { class: "field" }
+const _hoisted_89 = /*#__PURE__*/_createElementVNode("label", null, "训练引擎", -1 /* HOISTED */)
+const _hoisted_90 = ["value", "disabled"]
+const _hoisted_91 = /*#__PURE__*/_createElementVNode("option", { value: "lichtfeld" }, "LichtFeld Studio CLI", -1 /* HOISTED */)
+const _hoisted_92 = /*#__PURE__*/_createElementVNode("option", { value: "gsplat" }, "gsplat", -1 /* HOISTED */)
+const _hoisted_93 = [
+  _hoisted_91,
+  _hoisted_92
 ]
-const _hoisted_90 = { class: "field" }
-const _hoisted_91 = /*#__PURE__*/_createElementVNode("label", null, "迭代次数", -1 /* HOISTED */)
-const _hoisted_92 = ["value"]
-const _hoisted_93 = /*#__PURE__*/_createElementVNode("option", { value: 7000 }, "7,000", -1 /* HOISTED */)
-const _hoisted_94 = /*#__PURE__*/_createElementVNode("option", { value: 30000 }, "30,000", -1 /* HOISTED */)
-const _hoisted_95 = /*#__PURE__*/_createElementVNode("option", { value: 60000 }, "60,000", -1 /* HOISTED */)
-const _hoisted_96 = [
-  _hoisted_93,
-  _hoisted_94,
-  _hoisted_95
+const _hoisted_94 = { class: "field" }
+const _hoisted_95 = /*#__PURE__*/_createElementVNode("label", null, "迭代次数", -1 /* HOISTED */)
+const _hoisted_96 = ["value", "disabled"]
+const _hoisted_97 = /*#__PURE__*/_createElementVNode("option", { value: 7000 }, "7,000", -1 /* HOISTED */)
+const _hoisted_98 = /*#__PURE__*/_createElementVNode("option", { value: 30000 }, "30,000", -1 /* HOISTED */)
+const _hoisted_99 = /*#__PURE__*/_createElementVNode("option", { value: 60000 }, "60,000", -1 /* HOISTED */)
+const _hoisted_100 = [
+  _hoisted_97,
+  _hoisted_98,
+  _hoisted_99
 ]
-const _hoisted_97 = { class: "field" }
-const _hoisted_98 = /*#__PURE__*/_createElementVNode("label", null, "SH 阶数", -1 /* HOISTED */)
-const _hoisted_99 = ["value"]
-const _hoisted_100 = /*#__PURE__*/_createElementVNode("option", { value: 0 }, "0", -1 /* HOISTED */)
-const _hoisted_101 = /*#__PURE__*/_createElementVNode("option", { value: 1 }, "1", -1 /* HOISTED */)
-const _hoisted_102 = /*#__PURE__*/_createElementVNode("option", { value: 3 }, "3", -1 /* HOISTED */)
-const _hoisted_103 = [
-  _hoisted_100,
-  _hoisted_101,
-  _hoisted_102
+const _hoisted_101 = { class: "field" }
+const _hoisted_102 = /*#__PURE__*/_createElementVNode("label", null, "SH 阶数", -1 /* HOISTED */)
+const _hoisted_103 = ["value", "disabled"]
+const _hoisted_104 = /*#__PURE__*/_createElementVNode("option", { value: 0 }, "0", -1 /* HOISTED */)
+const _hoisted_105 = /*#__PURE__*/_createElementVNode("option", { value: 1 }, "1", -1 /* HOISTED */)
+const _hoisted_106 = /*#__PURE__*/_createElementVNode("option", { value: 3 }, "3", -1 /* HOISTED */)
+const _hoisted_107 = [
+  _hoisted_104,
+  _hoisted_105,
+  _hoisted_106
 ]
-const _hoisted_104 = { class: "field" }
-const _hoisted_105 = /*#__PURE__*/_createElementVNode("label", null, "目标平台档位", -1 /* HOISTED */)
-const _hoisted_106 = ["value"]
-const _hoisted_107 = /*#__PURE__*/_createElementVNode("option", { value: "quest3" }, "一体机（Quest / PICO）", -1 /* HOISTED */)
-const _hoisted_108 = /*#__PURE__*/_createElementVNode("option", { value: "xr_space" }, "PC 串流", -1 /* HOISTED */)
-const _hoisted_109 = /*#__PURE__*/_createElementVNode("option", { value: "webxr" }, "WebXR", -1 /* HOISTED */)
-const _hoisted_110 = [
-  _hoisted_107,
-  _hoisted_108,
-  _hoisted_109
+const _hoisted_108 = { class: "field" }
+const _hoisted_109 = /*#__PURE__*/_createElementVNode("label", null, "目标平台档位", -1 /* HOISTED */)
+const _hoisted_110 = ["value", "disabled"]
+const _hoisted_111 = /*#__PURE__*/_createElementVNode("option", { value: "quest3" }, "一体机（Quest / PICO）", -1 /* HOISTED */)
+const _hoisted_112 = /*#__PURE__*/_createElementVNode("option", { value: "xr_space" }, "PC 串流", -1 /* HOISTED */)
+const _hoisted_113 = /*#__PURE__*/_createElementVNode("option", { value: "webxr" }, "WebXR", -1 /* HOISTED */)
+const _hoisted_114 = [
+  _hoisted_111,
+  _hoisted_112,
+  _hoisted_113
 ]
-const _hoisted_111 = { class: "field" }
-const _hoisted_112 = /*#__PURE__*/_createElementVNode("label", null, "splat 上限", -1 /* HOISTED */)
-const _hoisted_113 = ["value"]
-const _hoisted_114 = { class: "kv small" }
-const _hoisted_115 = /*#__PURE__*/_createElementVNode("div", null, "预计训练", -1 /* HOISTED */)
-const _hoisted_116 = /*#__PURE__*/_createElementVNode("div", null, "执行方式", -1 /* HOISTED */)
-const _hoisted_117 = { value: "auto" }
-const _hoisted_118 = /*#__PURE__*/_createElementVNode("option", { value: "now" }, "立即执行", -1 /* HOISTED */)
-const _hoisted_119 = /*#__PURE__*/_createElementVNode("option", { value: "night" }, "夜间窗口 22:00–07:00", -1 /* HOISTED */)
-const _hoisted_120 = /*#__PURE__*/_createElementVNode("option", { value: "cloud" }, "云端", -1 /* HOISTED */)
-const _hoisted_121 = ["disabled"]
-const _hoisted_122 = { class: "panel" }
-const _hoisted_123 = /*#__PURE__*/_createElementVNode("h3", null, "训练进度", -1 /* HOISTED */)
-const _hoisted_124 = {
+const _hoisted_115 = { class: "field" }
+const _hoisted_116 = /*#__PURE__*/_createElementVNode("label", null, "splat 上限", -1 /* HOISTED */)
+const _hoisted_117 = ["value", "disabled"]
+const _hoisted_118 = { class: "kv small" }
+const _hoisted_119 = /*#__PURE__*/_createElementVNode("div", null, "预计训练", -1 /* HOISTED */)
+const _hoisted_120 = /*#__PURE__*/_createElementVNode("div", null, "执行方式", -1 /* HOISTED */)
+const _hoisted_121 = { value: "auto" }
+const _hoisted_122 = /*#__PURE__*/_createElementVNode("option", { value: "now" }, "立即执行", -1 /* HOISTED */)
+const _hoisted_123 = /*#__PURE__*/_createElementVNode("option", { value: "night" }, "夜间窗口 22:00–07:00", -1 /* HOISTED */)
+const _hoisted_124 = /*#__PURE__*/_createElementVNode("option", { value: "cloud" }, "云端", -1 /* HOISTED */)
+const _hoisted_125 = ["disabled"]
+const _hoisted_126 = { class: "panel" }
+const _hoisted_127 = /*#__PURE__*/_createElementVNode("h3", null, "训练进度", -1 /* HOISTED */)
+const _hoisted_128 = {
   key: 0,
   class: "sub"
 }
-const _hoisted_125 = { class: "body stack" }
-const _hoisted_126 = { class: "kv small" }
-const _hoisted_127 = /*#__PURE__*/_createElementVNode("div", null, "迭代", -1 /* HOISTED */)
-const _hoisted_128 = { class: "num" }
-const _hoisted_129 = /*#__PURE__*/_createElementVNode("div", null, "PSNR", -1 /* HOISTED */)
-const _hoisted_130 = { class: "num" }
-const _hoisted_131 = /*#__PURE__*/_createElementVNode("div", null, "显存", -1 /* HOISTED */)
-const _hoisted_132 = /*#__PURE__*/_createElementVNode("div", null, "剩余", -1 /* HOISTED */)
-const _hoisted_133 = { class: "small" }
-const _hoisted_134 = {
+const _hoisted_129 = { class: "body stack" }
+const _hoisted_130 = { class: "kv small" }
+const _hoisted_131 = /*#__PURE__*/_createElementVNode("div", null, "迭代", -1 /* HOISTED */)
+const _hoisted_132 = { class: "num" }
+const _hoisted_133 = /*#__PURE__*/_createElementVNode("div", null, "PSNR", -1 /* HOISTED */)
+const _hoisted_134 = { class: "num" }
+const _hoisted_135 = /*#__PURE__*/_createElementVNode("div", null, "显存", -1 /* HOISTED */)
+const _hoisted_136 = /*#__PURE__*/_createElementVNode("div", null, "剩余", -1 /* HOISTED */)
+const _hoisted_137 = { class: "small" }
+const _hoisted_138 = {
   key: 2,
   class: "small"
 }
-const _hoisted_135 = {
+const _hoisted_139 = {
   key: 3,
   class: "faint small"
 }
-const _hoisted_136 = { class: "panel" }
-const _hoisted_137 = /*#__PURE__*/_createElementVNode("header", null, [
+const _hoisted_140 = { class: "panel" }
+const _hoisted_141 = /*#__PURE__*/_createElementVNode("header", null, [
   /*#__PURE__*/_createElementVNode("h3", null, "导出")
 ], -1 /* HOISTED */)
-const _hoisted_138 = { class: "body stack" }
-const _hoisted_139 = { class: "seg" }
-const _hoisted_140 = ["onClick"]
-const _hoisted_141 = {
+const _hoisted_142 = { class: "body stack" }
+const _hoisted_143 = { class: "seg" }
+const _hoisted_144 = ["onClick"]
+const _hoisted_145 = {
   key: 0,
   class: "note warn small"
 }
-const _hoisted_142 = ["disabled"]
+const _hoisted_146 = ["disabled"]
 
 return function render(_ctx, _cache) {
   const _component_c_head = _resolveComponent("c-head")
@@ -7311,12 +7397,19 @@ return function render(_ctx, _cache) {
     _createVNode(_component_c_head, {
       code: "P07",
       ver: "V1.1",
-      title: "实景重建（3DGS）",
-      goal: "用照片或视频重建真实空间和文物，输出 3DGS。本页不调用任何生成模型。"
+      title: "实景重建（3DGS）演示",
+      goal: "使用示例素材体验重建流程。真实重建需要覆盖对象或空间的多角度素材。"
     }),
+    _createElementVNode("div", _hoisted_2, [
+      _createTextVNode(" 当前页面仅演示重建流程。只有一张图时，可在真实生产环境的需求单上传参考图，用于生成文物风格的展陈道具或创意资产。 "),
+      _createElementVNode("button", {
+        class: "btn sm",
+        onClick: _cache[0] || (_cache[0] = $event => (_ctx.go('jobs',{create:true,reference:true})))
+      }, "前往单图参考需求")
+    ]),
     (_ctx.d)
-      ? (_openBlock(), _createElementBlock("div", _hoisted_2, [
-          _createElementVNode("div", _hoisted_3, [
+      ? (_openBlock(), _createElementBlock("div", _hoisted_3, [
+          _createElementVNode("div", _hoisted_4, [
             _createVNode(_component_c_steps, {
               steps: _ctx.stepNames,
               cur: _ctx.d.step
@@ -7324,260 +7417,253 @@ return function render(_ctx, _cache) {
           ])
         ]))
       : _createCommentVNode("v-if", true),
-    _createElementVNode("div", _hoisted_4, [
-      _createElementVNode("div", _hoisted_5, [
-        _createElementVNode("div", _hoisted_6, [
-          _hoisted_7,
-          _createElementVNode("div", _hoisted_8, [
+    _createElementVNode("div", _hoisted_5, [
+      _createElementVNode("div", _hoisted_6, [
+        _createElementVNode("div", _hoisted_7, [
+          _hoisted_8,
+          _createElementVNode("div", _hoisted_9, [
             (_openBlock(true), _createElementBlock(_Fragment, null, _renderList(_ctx.list, (x) => {
               return (_openBlock(), _createElementBlock("button", {
                 class: _normalizeClass(["li", {sel: _ctx.selId===x.id}]),
                 key: x.id,
                 onClick: $event => (_ctx.selId=x.id)
               }, [
-                _createElementVNode("div", _hoisted_10, [
-                  _createElementVNode("div", _hoisted_11, _toDisplayString(x.name), 1 /* TEXT */),
-                  _createElementVNode("div", _hoisted_12, _toDisplayString(x.code) + " · " + _toDisplayString(x.photo_count) + " 张 · " + _toDisplayString({uploaded:'已上传',solving:'求解中',posed:'已求解',reshoot:'需补拍',training:'训练中',trained:'已训练',exported_qa:'已导出'}[x.status]), 1 /* TEXT */)
+                _createElementVNode("div", _hoisted_11, [
+                  _createElementVNode("div", _hoisted_12, _toDisplayString(x.name), 1 /* TEXT */),
+                  _createElementVNode("div", _hoisted_13, _toDisplayString(x.code) + " · " + _toDisplayString(x.photo_count) + " 张 · " + _toDisplayString({uploaded:'已上传',solving:'求解中',posed:'已求解',reshoot:'需补拍',training:'训练中',trained:'已训练',exported_qa:'已导出'}[x.status]), 1 /* TEXT */)
                 ])
-              ], 10 /* CLASS, PROPS */, _hoisted_9))
+              ], 10 /* CLASS, PROPS */, _hoisted_10))
             }), 128 /* KEYED_FRAGMENT */))
           ]),
-          _createElementVNode("div", _hoisted_13, [
-            _hoisted_14,
+          _createElementVNode("div", _hoisted_14, [
             _hoisted_15,
+            _hoisted_16,
+            (!_ctx.canRecon)
+              ? (_openBlock(), _createElementBlock("div", _hoisted_17, "产品／策划可查看演示过程。由 3D 美术或管理员创建素材集和执行重建步骤。"))
+              : _createCommentVNode("v-if", true),
             _withDirectives(_createElementVNode("input", {
               class: "inp",
-              "onUpdate:modelValue": _cache[0] || (_cache[0] = $event => ((_ctx.nf.name) = $event)),
+              "onUpdate:modelValue": _cache[1] || (_cache[1] = $event => ((_ctx.nf.name) = $event)),
+              disabled: !_ctx.canRecon,
               "aria-label": "名称"
-            }, null, 512 /* NEED_PATCH */), [
+            }, null, 8 /* PROPS */, _hoisted_18), [
               [_vModelText, _ctx.nf.name]
             ]),
             _withDirectives(_createElementVNode("select", {
               class: "inp",
-              "onUpdate:modelValue": _cache[1] || (_cache[1] = $event => ((_ctx.nf.job_id) = $event)),
+              "onUpdate:modelValue": _cache[2] || (_cache[2] = $event => ((_ctx.nf.job_id) = $event)),
+              disabled: !_ctx.canRecon,
               "aria-label": "关联需求单"
             }, [
-              _hoisted_16,
+              _hoisted_20,
               (_openBlock(true), _createElementBlock(_Fragment, null, _renderList(_ctx.jobs, (j) => {
                 return (_openBlock(), _createElementBlock("option", {
                   key: j.id,
                   value: j.id
-                }, _toDisplayString(j.code) + " " + _toDisplayString(j.title), 9 /* TEXT, PROPS */, _hoisted_17))
+                }, _toDisplayString(j.code) + " " + _toDisplayString(j.title), 9 /* TEXT, PROPS */, _hoisted_21))
               }), 128 /* KEYED_FRAGMENT */))
-            ], 512 /* NEED_PATCH */), [
+            ], 8 /* PROPS */, _hoisted_19), [
               [_vModelSelect, _ctx.nf.job_id]
-            ]),
-            _createElementVNode("input", {
-              class: "inp",
-              type: "file",
-              multiple: "",
-              accept: "image/*,video/*",
-              onChange: _cache[2] || (_cache[2] = (...args) => (_ctx.onFiles && _ctx.onFiles(...args))),
-              "aria-label": "上传照片"
-            }, null, 32 /* NEED_HYDRATION */),
-            _createElementVNode("label", _hoisted_18, [
-              _withDirectives(_createElementVNode("input", {
-                type: "checkbox",
-                "onUpdate:modelValue": _cache[3] || (_cache[3] = $event => ((_ctx.nf.sample) = $event))
-              }, null, 512 /* NEED_PATCH */), [
-                [_vModelCheckbox, _ctx.nf.sample]
-              ]),
-              _createTextVNode("使用示例素材集（412 张）")
             ]),
             _createElementVNode("button", {
               class: "btn",
-              onClick: _cache[4] || (_cache[4] = (...args) => (_ctx.create && _ctx.create(...args))),
+              disabled: !_ctx.canRecon,
+              onClick: _cache[3] || (_cache[3] = (...args) => (_ctx.create && _ctx.create(...args))),
               id: "btn-create-ds"
-            }, "上传并剔除模糊")
+            }, "使用示例素材（412 张）", 8 /* PROPS */, _hoisted_22)
           ])
         ]),
         (_ctx.d)
-          ? (_openBlock(), _createElementBlock("div", _hoisted_19, [
+          ? (_openBlock(), _createElementBlock("div", _hoisted_23, [
               _createElementVNode("header", null, [
-                _hoisted_20,
+                _hoisted_24,
                 _createVNode(_component_c_pill, {
                   kind: _ctx.capOk?'ok':'warn',
                   text: _ctx.capOk?'完整':'未完整'
                 }, null, 8 /* PROPS */, ["kind", "text"])
               ]),
-              _createElementVNode("div", _hoisted_21, [
-                _createElementVNode("div", _hoisted_22, [
-                  _hoisted_23,
+              _createElementVNode("div", _hoisted_25, [
+                _createElementVNode("div", _hoisted_26, [
+                  _hoisted_27,
                   _createElementVNode("input", {
                     class: "inp",
                     "data-draft": "",
                     value: _ctx.d.capture_record.collector,
-                    onChange: _cache[5] || (_cache[5] = $event => (_ctx.patch('capture_record.collector', $event.target.value))),
+                    disabled: !_ctx.canRecon,
+                    onChange: _cache[4] || (_cache[4] = $event => (_ctx.patch('capture_record.collector', $event.target.value))),
                     id: "cap-collector"
-                  }, null, 40 /* PROPS, NEED_HYDRATION */, _hoisted_24)
+                  }, null, 40 /* PROPS, NEED_HYDRATION */, _hoisted_28)
                 ]),
-                _createElementVNode("div", _hoisted_25, [
-                  _hoisted_26,
+                _createElementVNode("div", _hoisted_29, [
+                  _hoisted_30,
                   _createElementVNode("input", {
                     class: "inp",
                     type: "date",
                     "data-draft": "",
                     value: _ctx.d.capture_record.date,
-                    onChange: _cache[6] || (_cache[6] = $event => (_ctx.patch('capture_record.date', $event.target.value))),
+                    disabled: !_ctx.canRecon,
+                    onChange: _cache[5] || (_cache[5] = $event => (_ctx.patch('capture_record.date', $event.target.value))),
                     id: "cap-date"
-                  }, null, 40 /* PROPS, NEED_HYDRATION */, _hoisted_27)
+                  }, null, 40 /* PROPS, NEED_HYDRATION */, _hoisted_31)
                 ]),
-                _createElementVNode("div", _hoisted_28, [
-                  _hoisted_29,
+                _createElementVNode("div", _hoisted_32, [
+                  _hoisted_33,
                   _createElementVNode("input", {
                     class: "inp",
                     "data-draft": "",
                     value: _ctx.d.capture_record.control,
-                    onChange: _cache[7] || (_cache[7] = $event => (_ctx.patch('capture_record.control', $event.target.value))),
+                    disabled: !_ctx.canRecon,
+                    onChange: _cache[6] || (_cache[6] = $event => (_ctx.patch('capture_record.control', $event.target.value))),
                     placeholder: "例：8 个控制点 + 1 m 标尺",
                     id: "cap-control"
-                  }, null, 40 /* PROPS, NEED_HYDRATION */, _hoisted_30)
+                  }, null, 40 /* PROPS, NEED_HYDRATION */, _hoisted_34)
                 ]),
-                _createElementVNode("div", _hoisted_31, [
-                  _hoisted_32,
+                _createElementVNode("div", _hoisted_35, [
+                  _hoisted_36,
                   _createElementVNode("input", {
                     class: "inp",
                     "data-draft": "",
                     value: _ctx.d.capture_record.colorChart,
-                    onChange: _cache[8] || (_cache[8] = $event => (_ctx.patch('capture_record.colorChart', $event.target.value))),
+                    disabled: !_ctx.canRecon,
+                    onChange: _cache[7] || (_cache[7] = $event => (_ctx.patch('capture_record.colorChart', $event.target.value))),
                     placeholder: "例：X-Rite ColorChecker",
                     id: "cap-color"
-                  }, null, 40 /* PROPS, NEED_HYDRATION */, _hoisted_33)
+                  }, null, 40 /* PROPS, NEED_HYDRATION */, _hoisted_37)
                 ]),
-                _createElementVNode("div", _hoisted_34, [
-                  _hoisted_35,
+                _createElementVNode("div", _hoisted_38, [
+                  _hoisted_39,
                   _createElementVNode("div", null, _toDisplayString(_ctx.d.accuracy_report ? '已生成' : '训练完成后生成'), 1 /* TEXT */)
                 ])
               ])
             ]))
           : _createCommentVNode("v-if", true)
       ]),
-      _createElementVNode("div", _hoisted_36, [
-        _createElementVNode("div", _hoisted_37, [
-          _createElementVNode("div", _hoisted_38, null, 512 /* NEED_PATCH */),
+      _createElementVNode("div", _hoisted_40, [
+        _createElementVNode("div", _hoisted_41, [
+          _createElementVNode("div", _hoisted_42, null, 512 /* NEED_PATCH */),
           (_ctx.d)
-            ? (_openBlock(), _createElementBlock("div", _hoisted_39, [
-                _createElementVNode("div", _hoisted_40, [
+            ? (_openBlock(), _createElementBlock("div", _hoisted_43, [
+                _createElementVNode("div", _hoisted_44, [
                   _createElementVNode("button", {
                     class: _normalizeClass({on:_ctx.vmode==='splat'}),
-                    onClick: _cache[9] || (_cache[9] = $event => (_ctx.vmode='splat'))
+                    onClick: _cache[8] || (_cache[8] = $event => (_ctx.vmode='splat'))
                   }, "Splat", 2 /* CLASS */),
                   _createElementVNode("button", {
                     class: _normalizeClass({on:_ctx.vmode==='points'}),
-                    onClick: _cache[10] || (_cache[10] = $event => (_ctx.vmode='points'))
+                    onClick: _cache[9] || (_cache[9] = $event => (_ctx.vmode='points'))
                   }, "点云", 2 /* CLASS */)
                 ]),
-                _hoisted_41,
+                _hoisted_45,
                 _createElementVNode("button", {
                   class: "btn sm",
-                  disabled: !_ctx.d || _ctx.d.status!=='trained' || !_ctx.d.floaters,
-                  onClick: _cache[11] || (_cache[11] = $event => (_ctx.act(()=>_ctx.E.cleanRecon(_ctx.d.id,'floaters'),'已框选删除浮点')))
-                }, "框选删除浮点", 8 /* PROPS */, _hoisted_42),
+                  disabled: !_ctx.canRecon || !_ctx.d || _ctx.d.status!=='trained' || !_ctx.d.floaters,
+                  onClick: _cache[10] || (_cache[10] = $event => (_ctx.act(()=>_ctx.E.cleanRecon(_ctx.d.id,'floaters'),'已框选删除浮点')))
+                }, "框选删除浮点", 8 /* PROPS */, _hoisted_46),
                 _createElementVNode("button", {
                   class: "btn sm",
-                  disabled: !_ctx.d || _ctx.d.status!=='trained' || _ctx.d.cropped,
-                  onClick: _cache[12] || (_cache[12] = $event => (_ctx.act(()=>_ctx.E.cleanRecon(_ctx.d.id,'crop'),'已应用裁剪盒')))
-                }, "裁剪盒", 8 /* PROPS */, _hoisted_43)
+                  disabled: !_ctx.canRecon || !_ctx.d || _ctx.d.status!=='trained' || _ctx.d.cropped,
+                  onClick: _cache[11] || (_cache[11] = $event => (_ctx.act(()=>_ctx.E.cleanRecon(_ctx.d.id,'crop'),'已应用裁剪盒')))
+                }, "裁剪盒", 8 /* PROPS */, _hoisted_47)
               ]))
             : _createCommentVNode("v-if", true),
           (_ctx.d)
-            ? (_openBlock(), _createElementBlock("div", _hoisted_44, [
+            ? (_openBlock(), _createElementBlock("div", _hoisted_48, [
                 _createElementVNode("span", null, "已注册相机 " + _toDisplayString(_ctx.d.registered || 0) + " / " + _toDisplayString(_ctx.d.photo_count), 1 /* TEXT */),
                 _createElementVNode("span", null, "splat " + _toDisplayString(_ctx.U.n(_ctx.d.splats || 0)), 1 /* TEXT */),
                 _createElementVNode("span", null, "显示 " + _toDisplayString(_ctx.U.n(_ctx.shown)) + " 点（演示抽样）", 1 /* TEXT */)
               ]))
             : _createCommentVNode("v-if", true),
           (!_ctx.d)
-            ? (_openBlock(), _createElementBlock("div", _hoisted_45, "新建素材集开始重建"))
+            ? (_openBlock(), _createElementBlock("div", _hoisted_49, "新建素材集开始重建"))
             : _createCommentVNode("v-if", true)
         ]),
         (_ctx.d)
-          ? (_openBlock(), _createElementBlock("div", _hoisted_46, [
-              _hoisted_47,
-              _createElementVNode("div", _hoisted_48, [
-                _createElementVNode("div", _hoisted_49, [
+          ? (_openBlock(), _createElementBlock("div", _hoisted_50, [
+              _hoisted_51,
+              _createElementVNode("div", _hoisted_52, [
+                _createElementVNode("div", _hoisted_53, [
                   _createElementVNode("div", null, [
-                    _hoisted_50,
-                    _createElementVNode("b", _hoisted_51, _toDisplayString(_ctx.d.photo_count), 1 /* TEXT */)
+                    _hoisted_54,
+                    _createElementVNode("b", _hoisted_55, _toDisplayString(_ctx.d.photo_count), 1 /* TEXT */)
                   ]),
                   _createElementVNode("div", null, [
-                    _hoisted_52,
+                    _hoisted_56,
                     _createElementVNode("b", null, _toDisplayString(_ctx.d.resolution), 1 /* TEXT */)
                   ]),
                   _createElementVNode("div", null, [
-                    _hoisted_53,
+                    _hoisted_57,
                     _createElementVNode("b", null, _toDisplayString(_ctx.d.device), 1 /* TEXT */)
                   ]),
                   _createElementVNode("div", null, [
-                    _hoisted_54,
+                    _hoisted_58,
                     _createElementVNode("b", null, _toDisplayString(_ctx.d.overlap), 1 /* TEXT */)
                   ]),
                   _createElementVNode("div", null, [
-                    _hoisted_55,
-                    _createElementVNode("b", _hoisted_56, _toDisplayString(_ctx.d.blurred) + " 张", 1 /* TEXT */)
+                    _hoisted_59,
+                    _createElementVNode("b", _hoisted_60, _toDisplayString(_ctx.d.blurred) + " 张", 1 /* TEXT */)
                   ])
                 ]),
-                _createElementVNode("div", _hoisted_57, [
-                  _hoisted_58,
+                _createElementVNode("div", _hoisted_61, [
+                  _hoisted_62,
                   _createElementVNode("b", {
                     class: "num",
                     style: _normalizeStyle({color: _ctx.d.registered_ratio!=null && _ctx.d.registered_ratio<0.9 ? 'var(--err)' : ''})
                   }, _toDisplayString(_ctx.d.registered_ratio!=null ? (_ctx.d.registered_ratio*100).toFixed(1)+'%' : '—'), 5 /* TEXT, STYLE */),
-                  _hoisted_59,
-                  _hoisted_60,
-                  (_ctx.d.status==='reshoot')
+                  _hoisted_63,
+                  _hoisted_64,
+                  (_ctx.canRecon && _ctx.d.status==='reshoot')
                     ? (_openBlock(), _createElementBlock("button", {
                         key: 0,
                         class: "btn sm",
-                        onClick: _cache[13] || (_cache[13] = $event => (_ctx.act(()=>_ctx.E.appendPhotos(_ctx.d.id,60),'已追加 60 张补拍照片')))
+                        onClick: _cache[12] || (_cache[12] = $event => (_ctx.act(()=>_ctx.E.appendPhotos(_ctx.d.id,60),'演示中已增加 60 张补拍照片')))
                       }, "追加补拍素材"))
                     : _createCommentVNode("v-if", true),
-                  (_ctx.d.status==='uploaded')
-                    ? (_openBlock(), _createElementBlock("label", _hoisted_61, [
+                  (_ctx.canRecon && _ctx.d.status==='uploaded')
+                    ? (_openBlock(), _createElementBlock("label", _hoisted_65, [
                         _createElementVNode("input", {
                           type: "checkbox",
                           checked: _ctx.d.forceLowRatio,
-                          onChange: _cache[14] || (_cache[14] = $event => (_ctx.patch('forceLowRatio', $event.target.checked)))
-                        }, null, 40 /* PROPS, NEED_HYDRATION */, _hoisted_62),
+                          onChange: _cache[13] || (_cache[13] = $event => (_ctx.patch('forceLowRatio', $event.target.checked)))
+                        }, null, 40 /* PROPS, NEED_HYDRATION */, _hoisted_66),
                         _createTextVNode("演示：模拟注册率不足")
                       ]))
                     : _createCommentVNode("v-if", true),
                   _createElementVNode("button", {
                     class: "btn sm primary",
-                    disabled: !['uploaded','reshoot'].includes(_ctx.d.status) || _ctx.d.status==='reshoot',
-                    onClick: _cache[15] || (_cache[15] = $event => (_ctx.act(()=>_ctx.E.solvePoses(_ctx.d.id),'已提交位姿求解（COLMAP）'))),
+                    disabled: !_ctx.canRecon || _ctx.d.status!=='uploaded',
+                    onClick: _cache[14] || (_cache[14] = $event => (_ctx.act(()=>_ctx.E.solvePoses(_ctx.d.id),'已提交演示位姿求解'))),
                     id: "btn-solve"
-                  }, "位姿求解", 8 /* PROPS */, _hoisted_63)
+                  }, "位姿求解", 8 /* PROPS */, _hoisted_67)
                 ]),
                 (_ctx.d.status==='reshoot')
-                  ? (_openBlock(), _createElementBlock("div", _hoisted_64, "相机注册率低于 90%，请补拍覆盖不足的区域后重新求解。"))
+                  ? (_openBlock(), _createElementBlock("div", _hoisted_68, "相机注册率低于 90%，请补拍覆盖不足的区域后重新求解。"))
                   : _createCommentVNode("v-if", true)
               ])
             ]))
           : _createCommentVNode("v-if", true),
         (_ctx.d && _ctx.d.accuracy_report)
-          ? (_openBlock(), _createElementBlock("div", _hoisted_65, [
-              _hoisted_66,
-              _createElementVNode("div", _hoisted_67, [
-                _createElementVNode("div", _hoisted_68, [
+          ? (_openBlock(), _createElementBlock("div", _hoisted_69, [
+              _hoisted_70,
+              _createElementVNode("div", _hoisted_71, [
+                _createElementVNode("div", _hoisted_72, [
                   _createElementVNode("div", null, [
-                    _hoisted_69,
+                    _hoisted_73,
                     _createElementVNode("b", null, _toDisplayString(_ctx.d.accuracy_report.rmse_mm) + " mm", 1 /* TEXT */)
                   ]),
                   _createElementVNode("div", null, [
-                    _hoisted_70,
+                    _hoisted_74,
                     _createElementVNode("b", null, _toDisplayString(_ctx.d.accuracy_report.scale_error_pct) + "%", 1 /* TEXT */)
                   ]),
                   _createElementVNode("div", null, [
-                    _hoisted_71,
+                    _hoisted_75,
                     _createElementVNode("b", null, _toDisplayString(_ctx.d.accuracy_report.color_delta_e), 1 /* TEXT */)
                   ]),
                   _createElementVNode("div", null, [
-                    _hoisted_72,
+                    _hoisted_76,
                     _createElementVNode("b", null, _toDisplayString(_ctx.d.accuracy_report.psnr) + " dB", 1 /* TEXT */)
                   ]),
                   _createElementVNode("div", null, [
-                    _hoisted_73,
+                    _hoisted_77,
                     _createElementVNode("b", null, _toDisplayString(_ctx.d.accuracy_report.control_points), 1 /* TEXT */)
                   ])
                 ])
@@ -7586,75 +7672,81 @@ return function render(_ctx, _cache) {
           : _createCommentVNode("v-if", true)
       ]),
       (_ctx.d)
-        ? (_openBlock(), _createElementBlock("div", _hoisted_74, [
-            _createElementVNode("div", _hoisted_75, [
-              _hoisted_76,
-              _createElementVNode("div", _hoisted_77, [
-                _createElementVNode("div", _hoisted_78, [
-                  _createElementVNode("div", _hoisted_79, [
-                    _hoisted_80,
+        ? (_openBlock(), _createElementBlock("div", _hoisted_78, [
+            _createElementVNode("div", _hoisted_79, [
+              _hoisted_80,
+              _createElementVNode("div", _hoisted_81, [
+                _createElementVNode("div", _hoisted_82, [
+                  _createElementVNode("div", _hoisted_83, [
+                    _hoisted_84,
                     _createElementVNode("select", {
                       class: "inp",
                       value: _ctx.d.solver,
-                      onChange: _cache[16] || (_cache[16] = $event => (_ctx.patch('solver', $event.target.value)))
-                    }, _hoisted_83, 40 /* PROPS, NEED_HYDRATION */, _hoisted_81)
+                      disabled: !_ctx.canRecon,
+                      onChange: _cache[15] || (_cache[15] = $event => (_ctx.patch('solver', $event.target.value)))
+                    }, _hoisted_87, 40 /* PROPS, NEED_HYDRATION */, _hoisted_85)
                   ]),
-                  _createElementVNode("div", _hoisted_84, [
-                    _hoisted_85,
+                  _createElementVNode("div", _hoisted_88, [
+                    _hoisted_89,
                     _createElementVNode("select", {
                       class: "inp",
                       value: _ctx.d.engine,
-                      onChange: _cache[17] || (_cache[17] = $event => (_ctx.patch('engine', $event.target.value)))
-                    }, _hoisted_89, 40 /* PROPS, NEED_HYDRATION */, _hoisted_86)
+                      disabled: !_ctx.canRecon,
+                      onChange: _cache[16] || (_cache[16] = $event => (_ctx.patch('engine', $event.target.value)))
+                    }, _hoisted_93, 40 /* PROPS, NEED_HYDRATION */, _hoisted_90)
                   ]),
-                  _createElementVNode("div", _hoisted_90, [
-                    _hoisted_91,
+                  _createElementVNode("div", _hoisted_94, [
+                    _hoisted_95,
                     _createElementVNode("select", {
                       class: "inp",
                       value: _ctx.d.iterations,
-                      onChange: _cache[18] || (_cache[18] = $event => (_ctx.patch('iterations', +$event.target.value)))
-                    }, _hoisted_96, 40 /* PROPS, NEED_HYDRATION */, _hoisted_92)
+                      disabled: !_ctx.canRecon,
+                      onChange: _cache[17] || (_cache[17] = $event => (_ctx.patch('iterations', +$event.target.value)))
+                    }, _hoisted_100, 40 /* PROPS, NEED_HYDRATION */, _hoisted_96)
                   ]),
-                  _createElementVNode("div", _hoisted_97, [
-                    _hoisted_98,
+                  _createElementVNode("div", _hoisted_101, [
+                    _hoisted_102,
                     _createElementVNode("select", {
                       class: "inp",
                       value: _ctx.d.sh,
-                      onChange: _cache[19] || (_cache[19] = $event => (_ctx.patch('sh', +$event.target.value)))
-                    }, _hoisted_103, 40 /* PROPS, NEED_HYDRATION */, _hoisted_99)
+                      disabled: !_ctx.canRecon,
+                      onChange: _cache[18] || (_cache[18] = $event => (_ctx.patch('sh', +$event.target.value)))
+                    }, _hoisted_107, 40 /* PROPS, NEED_HYDRATION */, _hoisted_103)
                   ]),
-                  _createElementVNode("div", _hoisted_104, [
-                    _hoisted_105,
+                  _createElementVNode("div", _hoisted_108, [
+                    _hoisted_109,
                     _createElementVNode("select", {
                       class: "inp",
                       value: _ctx.d.platform,
-                      onChange: _cache[20] || (_cache[20] = $event => (_ctx.patch('platform', $event.target.value)))
-                    }, _hoisted_110, 40 /* PROPS, NEED_HYDRATION */, _hoisted_106)
+                      disabled: !_ctx.canRecon,
+                      onChange: _cache[19] || (_cache[19] = $event => (_ctx.patch('platform', $event.target.value)))
+                    }, _hoisted_114, 40 /* PROPS, NEED_HYDRATION */, _hoisted_110)
                   ]),
-                  _createElementVNode("div", _hoisted_111, [
-                    _hoisted_112,
+                  _createElementVNode("div", _hoisted_115, [
+                    _hoisted_116,
                     _createElementVNode("input", {
                       class: "inp",
                       type: "number",
                       "data-draft": "",
                       value: _ctx.d.splat_limit,
-                      onChange: _cache[21] || (_cache[21] = $event => (_ctx.patch('splat_limit', +$event.target.value)))
-                    }, null, 40 /* PROPS, NEED_HYDRATION */, _hoisted_113)
+                      disabled: !_ctx.canRecon,
+                      onChange: _cache[20] || (_cache[20] = $event => (_ctx.patch('splat_limit', +$event.target.value)))
+                    }, null, 40 /* PROPS, NEED_HYDRATION */, _hoisted_117)
                   ])
                 ]),
-                _createElementVNode("div", _hoisted_114, [
-                  _hoisted_115,
+                _createElementVNode("div", _hoisted_118, [
+                  _hoisted_119,
                   _createElementVNode("div", null, _toDisplayString(_ctx.U.dur(_ctx.est)), 1 /* TEXT */),
-                  _hoisted_116,
+                  _hoisted_120,
                   _createElementVNode("div", null, [
                     _withDirectives(_createElementVNode("select", {
                       class: "inp",
-                      "onUpdate:modelValue": _cache[22] || (_cache[22] = $event => ((_ctx.mode) = $event))
+                      "onUpdate:modelValue": _cache[21] || (_cache[21] = $event => ((_ctx.mode) = $event))
                     }, [
-                      _createElementVNode("option", _hoisted_117, _toDisplayString(_ctx.est>3600 ? '自动（超过 60 分钟排入夜间窗口）' : '自动（立即执行）'), 1 /* TEXT */),
-                      _hoisted_118,
-                      _hoisted_119,
-                      _hoisted_120
+                      _createElementVNode("option", _hoisted_121, _toDisplayString(_ctx.est>3600 ? '自动（超过 60 分钟排入夜间窗口）' : '自动（立即执行）'), 1 /* TEXT */),
+                      _hoisted_122,
+                      _hoisted_123,
+                      _hoisted_124
                     ], 512 /* NEED_PATCH */), [
                       [_vModelSelect, _ctx.mode]
                     ])
@@ -7662,33 +7754,33 @@ return function render(_ctx, _cache) {
                 ]),
                 _createElementVNode("button", {
                   class: "btn primary",
-                  disabled: _ctx.d.status!=='posed',
-                  onClick: _cache[23] || (_cache[23] = (...args) => (_ctx.train && _ctx.train(...args))),
+                  disabled: !_ctx.canRecon || _ctx.d.status!=='posed',
+                  onClick: _cache[22] || (_cache[22] = (...args) => (_ctx.train && _ctx.train(...args))),
                   id: "btn-train"
-                }, "开始训练", 8 /* PROPS */, _hoisted_121)
+                }, "开始训练", 8 /* PROPS */, _hoisted_125)
               ])
             ]),
-            _createElementVNode("div", _hoisted_122, [
+            _createElementVNode("div", _hoisted_126, [
               _createElementVNode("header", null, [
-                _hoisted_123,
+                _hoisted_127,
                 (_ctx.task)
-                  ? (_openBlock(), _createElementBlock("span", _hoisted_124, _toDisplayString(_ctx.task.code) + " · " + _toDisplayString(_ctx.D.TASK_STATUS[_ctx.task.status]) + _toDisplayString(_ctx.task.priority==='night'?'（夜间）':''), 1 /* TEXT */))
+                  ? (_openBlock(), _createElementBlock("span", _hoisted_128, _toDisplayString(_ctx.task.code) + " · " + _toDisplayString(_ctx.D.TASK_STATUS[_ctx.task.status]) + _toDisplayString(_ctx.task.priority==='night'?'（夜间）':''), 1 /* TEXT */))
                   : _createCommentVNode("v-if", true)
               ]),
-              _createElementVNode("div", _hoisted_125, [
+              _createElementVNode("div", _hoisted_129, [
                 (_ctx.task && _ctx.task.node==='gs_train')
                   ? (_openBlock(), _createElementBlock(_Fragment, { key: 0 }, [
                       _createVNode(_component_c_progress, {
                         v: _ctx.task.progress
                       }, null, 8 /* PROPS */, ["v"]),
-                      _createElementVNode("div", _hoisted_126, [
-                        _hoisted_127,
-                        _createElementVNode("div", _hoisted_128, _toDisplayString(_ctx.U.n(_ctx.task.metrics.iteration||0)) + " / " + _toDisplayString(_ctx.U.n(_ctx.task.params.iterations)), 1 /* TEXT */),
-                        _hoisted_129,
-                        _createElementVNode("div", _hoisted_130, _toDisplayString(_ctx.task.metrics.psnr || '—') + " dB", 1 /* TEXT */),
+                      _createElementVNode("div", _hoisted_130, [
                         _hoisted_131,
+                        _createElementVNode("div", _hoisted_132, _toDisplayString(_ctx.U.n(_ctx.task.metrics.iteration||0)) + " / " + _toDisplayString(_ctx.U.n(_ctx.task.params.iterations)), 1 /* TEXT */),
+                        _hoisted_133,
+                        _createElementVNode("div", _hoisted_134, _toDisplayString(_ctx.task.metrics.psnr || '—') + " dB", 1 /* TEXT */),
+                        _hoisted_135,
                         _createElementVNode("div", null, _toDisplayString(_ctx.task.vram_peak ? _ctx.task.vram_peak.toFixed(1)+' GB' : '—'), 1 /* TEXT */),
-                        _hoisted_132,
+                        _hoisted_136,
                         _createElementVNode("div", null, _toDisplayString(_ctx.U.dur(_ctx.task.duration-_ctx.task.elapsed)), 1 /* TEXT */)
                       ]),
                       _createVNode(_component_c_line, {
@@ -7703,34 +7795,34 @@ return function render(_ctx, _cache) {
                         _createVNode(_component_c_progress, {
                           v: _ctx.task.progress
                         }, null, 8 /* PROPS */, ["v"]),
-                        _createElementVNode("span", _hoisted_133, _toDisplayString(_ctx.D.NODE_NAMES[_ctx.task.node]) + " " + _toDisplayString(Math.round(_ctx.task.progress*100)) + "%", 1 /* TEXT */)
+                        _createElementVNode("span", _hoisted_137, _toDisplayString(_ctx.D.NODE_NAMES[_ctx.task.node]) + " " + _toDisplayString(Math.round(_ctx.task.progress*100)) + "%", 1 /* TEXT */)
                       ], 64 /* STABLE_FRAGMENT */))
                     : (_ctx.d.psnr)
-                      ? (_openBlock(), _createElementBlock("div", _hoisted_134, "训练完成 · PSNR " + _toDisplayString(_ctx.d.psnr) + " dB · " + _toDisplayString(_ctx.U.n(_ctx.d.splats)) + " splat", 1 /* TEXT */))
-                      : (_openBlock(), _createElementBlock("div", _hoisted_135, "尚未开始"))
+                      ? (_openBlock(), _createElementBlock("div", _hoisted_138, "训练完成 · PSNR " + _toDisplayString(_ctx.d.psnr) + " dB · " + _toDisplayString(_ctx.U.n(_ctx.d.splats)) + " splat", 1 /* TEXT */))
+                      : (_openBlock(), _createElementBlock("div", _hoisted_139, "尚未开始"))
               ])
             ]),
-            _createElementVNode("div", _hoisted_136, [
-              _hoisted_137,
-              _createElementVNode("div", _hoisted_138, [
-                _createElementVNode("div", _hoisted_139, [
+            _createElementVNode("div", _hoisted_140, [
+              _hoisted_141,
+              _createElementVNode("div", _hoisted_142, [
+                _createElementVNode("div", _hoisted_143, [
                   (_openBlock(), _createElementBlock(_Fragment, null, _renderList([['spz','SPZ'],['ply','PLY'],['gltf','glTF + KHR_gaussian_splatting']], (x) => {
                     return _createElementVNode("button", {
                       key: x[0],
                       class: _normalizeClass({on: _ctx.exportFmt===x[0]}),
                       onClick: $event => (_ctx.exportFmt=x[0])
-                    }, _toDisplayString(x[1]), 11 /* TEXT, CLASS, PROPS */, _hoisted_140)
+                    }, _toDisplayString(x[1]), 11 /* TEXT, CLASS, PROPS */, _hoisted_144)
                   }), 64 /* STABLE_FRAGMENT */))
                 ]),
                 (!_ctx.capOk)
-                  ? (_openBlock(), _createElementBlock("div", _hoisted_141, "采集记录未填写完整时不能导出。"))
+                  ? (_openBlock(), _createElementBlock("div", _hoisted_145, "采集记录未填写完整时不能导出。"))
                   : _createCommentVNode("v-if", true),
                 _createElementVNode("button", {
                   class: "btn primary",
-                  disabled: _ctx.d.status!=='trained',
-                  onClick: _cache[24] || (_cache[24] = (...args) => (_ctx.doExport && _ctx.doExport(...args))),
+                  disabled: !_ctx.canRecon || _ctx.d.status!=='trained',
+                  onClick: _cache[23] || (_cache[23] = (...args) => (_ctx.doExport && _ctx.doExport(...args))),
                   id: "btn-recon-export"
-                }, "导出并送入质检", 8 /* PROPS */, _hoisted_142)
+                }, "导出并送入质检", 8 /* PROPS */, _hoisted_146)
               ])
             ])
           ]))

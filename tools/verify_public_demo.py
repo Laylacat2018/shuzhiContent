@@ -3,14 +3,16 @@ import argparse
 import hashlib
 import json
 import urllib.request
+from pathlib import Path
 
 
 def main():
     ap=argparse.ArgumentParser();ap.add_argument('--base',default='https://space.migucomi.com');a=ap.parse_args();base=a.base.rstrip('/')
+    version = (Path(__file__).resolve().parents[1] / 'VERSION').read_text().strip()
     def get(path):
         with urllib.request.urlopen(base+path,timeout=30) as r:return r.read()
-    health=json.loads(get('/healthz'));assert health['version']=='1.1.0',f"Public version is still {health.get('version')}"
-    catalog=json.loads(get('/showcase/catalog'));assert catalog['version']=='1.1.0'
+    health=json.loads(get('/healthz'));assert health['version']==version,f"Expected {version}, got {health.get('version')}"
+    catalog=json.loads(get('/showcase/catalog'));assert catalog['version']==version
     for item in catalog['files']:
         assert '/' not in item['name'] and '\\' not in item['name']
         data=get('/showcase/assets/'+item['name'])

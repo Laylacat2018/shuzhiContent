@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Real ComfyUI Qwen workflow, optional reference img2img/LoRA, BiRefNet transparent PNG."""
 import json
+from io import BytesIO
 import os
 from pathlib import Path
 import sys
@@ -12,6 +13,22 @@ sys.path.insert(0,str(ROOT))
 from ops.m0.samples.comfy_qwen_image import Comfy, DEFAULTS, workflow
 
 
+def prepare_reference(path, size):
+    """Preserve the original upload and pass bounded, consistently encoded pixels to ComfyUI."""
+    from PIL import Image, ImageOps
+    with Image.open(path) as source:
+        reference = ImageOps.exif_transpose(source).convert('RGBA')
+    reference.thumbnail((size, size), Image.Resampling.LANCZOS)
+    width, height = (max(16, (n + 7) // 8 * 8) for n in reference.size)
+    if (width, height) != reference.size:
+        reference = reference.resize((width, height), Image.Resampling.LANCZOS)
+    background = Image.new('RGBA', reference.size, 'white')
+    background.alpha_composite(reference)
+    result = BytesIO()
+    background.convert('RGB').save(result, format='PNG')
+    return result.getvalue()
+
+
 def main(o):
     from PIL import Image, PngImagePlugin
     out=Path(o['output']);out.mkdir(parents=True,exist_ok=True)
@@ -19,7 +36,7 @@ def main(o):
     opts=dict(DEFAULTS,width=int(o.get('size',1024)),height=int(o.get('size',1024)),batch=1)
     if o.get('reference'):
         # Upload only this task's reference to the locally configured ComfyUI.
-        boundary=uuid.uuid4().hex;data=Path(o['reference']).read_bytes()
+        boundary=uuid.uuid4().hex;data=prepare_reference(o['reference'], opts['width'])
         body=(f'--{boundary}\r\nContent-Disposition: form-data; name="image"; filename="scw-{uuid.uuid4().hex}.png"\r\nContent-Type: image/png\r\n\r\n').encode()+data+f'\r\n--{boundary}--\r\n'.encode()
         req=urllib.request.Request(c.url+'/upload/image',data=body,headers={'Content-Type':'multipart/form-data; boundary='+boundary})
         ref=json.loads(urllib.request.urlopen(req,timeout=120).read())['name']
@@ -54,7 +71,10 @@ def main(o):
         model.cpu();del model
     for i,p in enumerate(paths):
         info=PngImagePlugin.PngInfo()
-        info.add_text('AIGC',json.dumps({'label':'AI 生成','model':'Qwen-Image','seed':int(o['seed'])+i,'prompt':o['prompt']},ensure_ascii=False))
+        mark = {'label':'AI 生成','model':'Qwen-Image','seed':int(o['seed'])+i,'prompt':o['prompt']}
+        if o.get('reference_sha256'):
+            mark['reference_sha256'] = o['reference_sha256']
+        info.add_text('AIGC',json.dumps(mark,ensure_ascii=False))
         Image.open(p).save(p,pnginfo=info)
     (out/'concept-result.json').write_text(json.dumps(paths),'utf-8')
 

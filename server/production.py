@@ -255,7 +255,10 @@ class Runtime:
             request = dict(t["params"], url=self.cfg.comfy_url, output=str(folder), trellis_home=self.cfg.trellis_home)
             job = next((j for j in S["jobs"] if j["id"] == t.get("job_id")), {})
             refs = job.get("ref_images", [])
-            if refs: request["reference"] = str(self.files.path(ws, refs[0]["file_id"]))
+            if refs:
+                reference = self.files.verify(ws, refs[0]['file_id'])
+                request['reference'] = str(self.files.path(ws, reference['id']))
+                request['reference_sha256'] = reference['sha256']
             if t["params"].get("lora"):
                 model = next(m for m in S["models"] if m["id"] == t["params"]["lora"])
                 request["lora_file"] = model["file_name"]
@@ -269,6 +272,8 @@ class Runtime:
             for p in paths:
                 f = self.files.put(ws, Path(p).name, Path(p), "image/png")
                 images.append(dict(file_id=f["file_id"], url=f["url"], sha256=f["sha256"]))
+                if refs:
+                    images[-1].update(reference_file_id=reference['id'], reference_sha256=reference['sha256'])
             return dict(images=images, license_chain=chain)
         if t["node"] == "image_to_3d":
             from ops.m0.samples.comfy_qwen_image import Comfy

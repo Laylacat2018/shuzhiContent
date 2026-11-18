@@ -52,7 +52,7 @@ def test_published_showcase_is_real_and_separate_from_workspace_files(api):
     import hashlib
     client,app=api
     catalog=client.get('/showcase/catalog').json()
-    assert catalog['version']=='1.1.0' and catalog['sample_kind']=='actual_artifact'
+    assert catalog['version']==app.VERSION and catalog['sample_kind']=='actual_artifact'
     assert {v['id'] for v in catalog['variants']}=={'hero','webxr'}
     for entry in catalog['files']:
         response=client.get('/showcase/assets/'+entry['name'])
@@ -80,6 +80,12 @@ def test_real_upload_is_workspace_scoped_and_byte_preserving(api):
     r=client.post('/api/v1/files',headers=h,files={'file':('ref.png',data,'image/png')})
     assert r.status_code==200,r.text
     file=r.json();assert client.get(file['url'],headers=h).content==data
+    pm=login(client,user='u_pm');payload={'title':'单图参考测试','content_type':'prop','is_heritage':False,'platforms':['webxr'],'quantity':1,'ref_images':[{'file_id':file['file_id'],'name':'client-name.png'}]}
+    draft=client.post('/api/v1/rpc',headers=pm,json={'fn':'createJob','args':[payload]})
+    assert draft.status_code==200,draft.text
+    job=draft.json()['result'];assert job['ref_images'][0]['sha256']==file['sha256']
+    assert job['ref_images'][0]['name']=='ref.png'
+    assert client.post('/api/v1/rpc',headers=pm,json={'fn':'updateJob','args':[job['id'],dict(payload,title='修改参考需求')]}).status_code==200
     other=login(client,ws='other')
     assert client.get(file['url'],headers=other).status_code==404
     assert client.post('/api/v1/files',headers=h,files={'file':('bad.png',b'not an image','image/png')}).status_code==400

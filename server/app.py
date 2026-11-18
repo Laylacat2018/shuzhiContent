@@ -133,7 +133,10 @@ def production_guard(c: Ctx, fn: str, args: tuple) -> None:
         if set(body) - allowed: raise BizError("需求单包含不可修改的字段", "bad_request")
         for ref in body.get("ref_images", []):
             if not isinstance(ref, dict) or not ref.get("file_id"): raise BizError("参考图须先上传", "bad_request")
-            runtime.files.verify(c.ws, ref["file_id"])
+            saved = runtime.files.verify(c.ws, ref["file_id"])
+            if saved['media_type'] not in {'image/png', 'image/jpeg', 'image/webp'}:
+                raise BizError('参考图须为 PNG、JPEG 或 WebP', 'bad_request')
+            ref.update(runtime.files.public(saved))
     if fn in {"uploadLicense", "manualResolve"}:
         f = args[1] if fn == "uploadLicense" else args[2] if len(args)>2 else None
         if not isinstance(f, dict) or not f.get("file_id"): raise BizError("必须先上传真实文件", "bad_request")
@@ -222,8 +225,9 @@ async def upload_file(file: UploadFile = File(...), c: Ctx = Depends(ctx)) -> di
             from PIL import Image
             with Image.open(io.BytesIO(data)) as im:
                 if im.width * im.height > 40_000_000: raise ValueError("图片像素过大")
+                media = {"PNG":"image/png", "JPEG":"image/jpeg", "WEBP":"image/webp"}.get(im.format)
+                if not media: raise ValueError("图片须为 PNG、JPEG 或 WebP")
                 im.verify()
-            media = {".png":"image/png", ".jpg":"image/jpeg", ".jpeg":"image/jpeg", ".webp":"image/webp"}[suffix]
         elif suffix == ".glb":
             import struct
             if len(data)<20 or data[:4] != b"glTF" or struct.unpack_from("<I",data,8)[0] != len(data): raise ValueError("GLB 结构无效")

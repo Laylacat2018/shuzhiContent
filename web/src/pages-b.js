@@ -112,60 +112,68 @@
       const task = computed(() => { st.rev; return d.value && E.S.tasks.find(t => t.recon_id === d.value.id && ['queued', 'running'].includes(t.status)); });
       const psnr = reactive({}); watch(() => task.value && task.value.metrics && task.value.metrics.psnr, (v) => { if (v && d.value) { (psnr[d.value.id] = psnr[d.value.id] || []).push(v); } });
       const jobs = computed(() => { st.rev; return E.S.jobs.filter(j => j.project_id === E.S.currentProjectId && j.content_type === 'recon'); });
-      const nf = reactive({ name: '新展厅数据集', job_id: st.params.job || '', count: 0, sample: true });
-      const onFiles = (e) => { nf.count = e.target.files.length; nf.sample = false; };
-      const create = () => { const n = nf.sample ? 412 : nf.count; if (!n) return toast('请选择照片或使用示例素材集', 'err'); const r = act(() => E.createDataset({ name: nf.name, job_id: nf.job_id || null, photo_count: n, resolution: '6000×4000', device: nf.sample ? 'Sony A7R V + 24mm' : '本地上传', overlap: '约 75%' }), '素材已上传，已剔除模糊照片'); if (r) selId.value = r.id; };
+      const canRecon = computed(() => { st.rev; return E.can('recon'); });
+      const nf = reactive({ name: '新展厅数据集', job_id: st.params.job || '' });
+      const create = () => {
+        if (!canRecon.value) return;
+        const result = act(() => E.createDataset({ name: nf.name, job_id: nf.job_id || null, photo_count: 412, resolution: '6000×4000', device: 'Sony A7R V + 24mm', overlap: '约 75%' }), '已创建演示素材集');
+        if (result) selId.value = result.id;
+      };
       const est = computed(() => { if (!d.value) return 0; const m = E.model('lichtfeld'); return Math.round(m.unit_s * d.value.photo_count / 400 * d.value.iterations / 30000); });
       const mode = ref('auto');
       const train = () => act(() => E.trainGS(d.value.id, { iterations: d.value.iterations, sh: d.value.sh, splat_limit: d.value.splat_limit, platform: d.value.platform, mode: mode.value === 'auto' ? undefined : mode.value }), est.value > 3600 && mode.value === 'auto' ? '预计超过 60 分钟，已排入夜间窗口' : '已开始训练');
-      const patch = (path, v) => act(() => E.patch('recon', d.value.id, path, v));
+      const patch = (path, v) => canRecon.value && act(() => E.patch('recon', d.value.id, path, v));
       const stepNames = ['上传素材', '位姿求解', '3DGS 训练', '清理浮点', '导出'];
       const exportFmt = ref('spz');
       const doExport = () => { const r = act(() => E.finishRecon(d.value.id), (a) => `已导出并送入质检：${a.code}`); if (r) { const sp = Geo.buildSplats(Geo.hash(d.value.code), 20000, false, true); const head = `ply\nformat ascii 1.0\ncomment SpatialContentWorks 3DGS export (demo, ${sp.count} pts)\nelement vertex ${sp.count}\nproperty float x\nproperty float y\nproperty float z\nproperty uchar red\nproperty uchar green\nproperty uchar blue\nend_header\n`; let body = ''; for (let i = 0; i < sp.count; i++) body += `${sp.positions[i * 3].toFixed(3)} ${sp.positions[i * 3 + 1].toFixed(3)} ${sp.positions[i * 3 + 2].toFixed(3)} ${sp.colors[i * 3] * 255 | 0} ${sp.colors[i * 3 + 1] * 255 | 0} ${sp.colors[i * 3 + 2] * 255 | 0}\n`; if (exportFmt.value === 'ply') saveFile(d.value.code + '.ply', head + body, 'text/plain'); } };
       const capOk = computed(() => d.value && E.captureComplete(d.value));
-      return { patch, list, selId, d, el, vmode, shown, task, psnr, jobs, nf, onFiles, create, est, mode, train, stepNames, exportFmt, doExport, capOk, E, D, U, st, go, act };
+      return { patch, list, selId, d, el, vmode, shown, task, psnr, jobs, nf, canRecon, create, est, mode, train, stepNames, exportFmt, doExport, capOk, E, D, U, st, go, act };
     },
     template: `<div class="page" :data-r="st.rev">
-      <c-head code="P07" ver="V1.1" title="实景重建（3DGS）" goal="用照片或视频重建真实空间和文物，输出 3DGS。本页不调用任何生成模型。"></c-head>
+      <c-head code="P07" ver="V1.1" title="实景重建（3DGS）演示" goal="使用示例素材体验重建流程。真实重建需要覆盖对象或空间的多角度素材。"></c-head>
+      <div class="note" style="margin-bottom:12px">
+        当前页面仅演示重建流程。只有一张图时，可在真实生产环境的需求单上传参考图，用于生成文物风格的展陈道具或创意资产。
+        <button class="btn sm" @click="go('jobs',{create:true,reference:true})">前往单图参考需求</button>
+      </div>
       <div class="panel" style="margin-bottom:12px" v-if="d"><div class="body"><c-steps :steps="stepNames" :cur="d.step"></c-steps></div></div>
       <div class="split3">
         <div class="stack">
           <div class="panel"><header><h3>素材集</h3></header><div class="list"><button class="li" v-for="x in list" :key="x.id" :class="{sel: selId===x.id}" @click="selId=x.id"><div class="grow"><div class="t1">{{ x.name }}</div><div class="t2">{{ x.code }} · {{ x.photo_count }} 张 · {{ {uploaded:'已上传',solving:'求解中',posed:'已求解',reshoot:'需补拍',training:'训练中',trained:'已训练',exported_qa:'已导出'}[x.status] }}</div></div></button></div>
-            <div class="body stack"><div class="divider"></div><b class="small">新建素材集</b>
-              <input class="inp" v-model="nf.name" aria-label="名称"><select class="inp" v-model="nf.job_id" aria-label="关联需求单"><option value="">不关联需求单</option><option v-for="j in jobs" :key="j.id" :value="j.id">{{ j.code }} {{ j.title }}</option></select>
-              <input class="inp" type="file" multiple accept="image/*,video/*" @change="onFiles" aria-label="上传照片"><label class="check small"><input type="checkbox" v-model="nf.sample">使用示例素材集（412 张）</label>
-              <button class="btn" @click="create" id="btn-create-ds">上传并剔除模糊</button></div></div>
+            <div class="body stack"><div class="divider"></div><b class="small">新建演示素材集</b>
+              <div v-if="!canRecon" class="faint small">产品／策划可查看演示过程。由 3D 美术或管理员创建素材集和执行重建步骤。</div>
+              <input class="inp" v-model="nf.name" :disabled="!canRecon" aria-label="名称"><select class="inp" v-model="nf.job_id" :disabled="!canRecon" aria-label="关联需求单"><option value="">不关联需求单</option><option v-for="j in jobs" :key="j.id" :value="j.id">{{ j.code }} {{ j.title }}</option></select>
+              <button class="btn" :disabled="!canRecon" @click="create" id="btn-create-ds">使用示例素材（412 张）</button></div></div>
           <div class="panel" v-if="d"><header><h3>文博采集记录</h3><c-pill :kind="capOk?'ok':'warn'" :text="capOk?'完整':'未完整'"></c-pill></header><div class="body stack">
-            <div class="field"><label class="req">采集人</label><input class="inp" data-draft :value="d.capture_record.collector" @change="patch('capture_record.collector', $event.target.value)" id="cap-collector"></div>
-            <div class="field"><label class="req">采集日期</label><input class="inp" type="date" data-draft :value="d.capture_record.date" @change="patch('capture_record.date', $event.target.value)" id="cap-date"></div>
-            <div class="field"><label class="req">标尺 / 控制点</label><input class="inp" data-draft :value="d.capture_record.control" @change="patch('capture_record.control', $event.target.value)" placeholder="例：8 个控制点 + 1 m 标尺" id="cap-control"></div>
-            <div class="field"><label class="req">色卡</label><input class="inp" data-draft :value="d.capture_record.colorChart" @change="patch('capture_record.colorChart', $event.target.value)" placeholder="例：X-Rite ColorChecker" id="cap-color"></div>
+            <div class="field"><label class="req">采集人</label><input class="inp" data-draft :value="d.capture_record.collector" :disabled="!canRecon" @change="patch('capture_record.collector', $event.target.value)" id="cap-collector"></div>
+            <div class="field"><label class="req">采集日期</label><input class="inp" type="date" data-draft :value="d.capture_record.date" :disabled="!canRecon" @change="patch('capture_record.date', $event.target.value)" id="cap-date"></div>
+            <div class="field"><label class="req">标尺 / 控制点</label><input class="inp" data-draft :value="d.capture_record.control" :disabled="!canRecon" @change="patch('capture_record.control', $event.target.value)" placeholder="例：8 个控制点 + 1 m 标尺" id="cap-control"></div>
+            <div class="field"><label class="req">色卡</label><input class="inp" data-draft :value="d.capture_record.colorChart" :disabled="!canRecon" @change="patch('capture_record.colorChart', $event.target.value)" placeholder="例：X-Rite ColorChecker" id="cap-color"></div>
             <div class="kv small"><div>精度报告</div><div>{{ d.accuracy_report ? '已生成' : '训练完成后生成' }}</div></div>
           </div></div>
         </div>
         <div class="stack" style="min-width:0">
           <div class="viewport" style="height:460px"><div ref="el" style="position:absolute;inset:0"></div>
             <div class="vp-tools" v-if="d"><div class="seg"><button :class="{on:vmode==='splat'}" @click="vmode='splat'">Splat</button><button :class="{on:vmode==='points'}" @click="vmode='points'">点云</button></div><span class="spacer"></span>
-              <button class="btn sm" :disabled="!d || d.status!=='trained' || !d.floaters" @click="act(()=>E.cleanRecon(d.id,'floaters'),'已框选删除浮点')">框选删除浮点</button><button class="btn sm" :disabled="!d || d.status!=='trained' || d.cropped" @click="act(()=>E.cleanRecon(d.id,'crop'),'已应用裁剪盒')">裁剪盒</button></div>
+              <button class="btn sm" :disabled="!canRecon || !d || d.status!=='trained' || !d.floaters" @click="act(()=>E.cleanRecon(d.id,'floaters'),'已框选删除浮点')">框选删除浮点</button><button class="btn sm" :disabled="!canRecon || !d || d.status!=='trained' || d.cropped" @click="act(()=>E.cleanRecon(d.id,'crop'),'已应用裁剪盒')">裁剪盒</button></div>
             <div class="vp-overlay" v-if="d"><span>已注册相机 {{ d.registered || 0 }} / {{ d.photo_count }}</span><span>splat {{ U.n(d.splats || 0) }}</span><span>显示 {{ U.n(shown) }} 点（演示抽样）</span></div>
             <div v-if="!d" class="vp-empty">新建素材集开始重建</div></div>
           <div class="panel" v-if="d"><header><h3>素材统计</h3></header><div class="body"><div class="grid g5 small">
             <div><div class="lbl">照片数</div><b class="num">{{ d.photo_count }}</b></div><div><div class="lbl">分辨率</div><b>{{ d.resolution }}</b></div><div><div class="lbl">设备</div><b>{{ d.device }}</b></div><div><div class="lbl">重叠度估计</div><b>{{ d.overlap }}</b></div><div><div class="lbl">模糊剔除</div><b class="num">{{ d.blurred }} 张</b></div></div>
             <div class="row" style="margin-top:10px"><span>相机注册率：</span><b class="num" :style="{color: d.registered_ratio!=null && d.registered_ratio<0.9 ? 'var(--err)' : ''}">{{ d.registered_ratio!=null ? (d.registered_ratio*100).toFixed(1)+'%' : '—' }}</b><span class="faint small">（低于 90% 提示补拍，不进入训练）</span><span class="spacer"></span>
-              <button class="btn sm" v-if="d.status==='reshoot'" @click="act(()=>E.appendPhotos(d.id,60),'已追加 60 张补拍照片')">追加补拍素材</button>
-              <label class="check small" v-if="d.status==='uploaded'"><input type="checkbox" :checked="d.forceLowRatio" @change="patch('forceLowRatio', $event.target.checked)">演示：模拟注册率不足</label>
-              <button class="btn sm primary" :disabled="!['uploaded','reshoot'].includes(d.status) || d.status==='reshoot'" @click="act(()=>E.solvePoses(d.id),'已提交位姿求解（COLMAP）')" id="btn-solve">位姿求解</button></div>
+              <button class="btn sm" v-if="canRecon && d.status==='reshoot'" @click="act(()=>E.appendPhotos(d.id,60),'演示中已增加 60 张补拍照片')">追加补拍素材</button>
+              <label class="check small" v-if="canRecon && d.status==='uploaded'"><input type="checkbox" :checked="d.forceLowRatio" @change="patch('forceLowRatio', $event.target.checked)">演示：模拟注册率不足</label>
+              <button class="btn sm primary" :disabled="!canRecon || d.status!=='uploaded'" @click="act(()=>E.solvePoses(d.id),'已提交演示位姿求解')" id="btn-solve">位姿求解</button></div>
             <div class="note warn" v-if="d.status==='reshoot'" style="margin-top:8px">相机注册率低于 90%，请补拍覆盖不足的区域后重新求解。</div>
           </div></div>
-          <div class="panel" v-if="d && d.accuracy_report"><header><h3>精度报告</h3></header><div class="body"><div class="grid g5 small"><div><div class="lbl">重投影 RMSE</div><b>{{ d.accuracy_report.rmse_mm }} mm</b></div><div><div class="lbl">尺度误差</div><b>{{ d.accuracy_report.scale_error_pct }}%</b></div><div><div class="lbl">色差 ΔE</div><b>{{ d.accuracy_report.color_delta_e }}</b></div><div><div class="lbl">PSNR</div><b>{{ d.accuracy_report.psnr }} dB</b></div><div><div class="lbl">控制点</div><b>{{ d.accuracy_report.control_points }}</b></div></div></div></div>
+          <div class="panel" v-if="d && d.accuracy_report"><header><h3>演示精度报告</h3></header><div class="body"><div class="grid g5 small"><div><div class="lbl">重投影 RMSE</div><b>{{ d.accuracy_report.rmse_mm }} mm</b></div><div><div class="lbl">尺度误差</div><b>{{ d.accuracy_report.scale_error_pct }}%</b></div><div><div class="lbl">色差 ΔE</div><b>{{ d.accuracy_report.color_delta_e }}</b></div><div><div class="lbl">PSNR</div><b>{{ d.accuracy_report.psnr }} dB</b></div><div><div class="lbl">控制点</div><b>{{ d.accuracy_report.control_points }}</b></div></div></div></div>
         </div>
         <div class="stack" v-if="d">
           <div class="panel"><header><h3>训练参数</h3></header><div class="body stack">
-            <div class="grid g2"><div class="field"><label>位姿求解</label><select class="inp" :value="d.solver" @change="patch('solver', $event.target.value)"><option value="colmap">COLMAP</option></select></div><div class="field"><label>训练引擎</label><select class="inp" :value="d.engine" @change="patch('engine', $event.target.value)"><option value="lichtfeld">LichtFeld Studio CLI</option><option value="gsplat">gsplat</option></select></div>
-              <div class="field"><label>迭代次数</label><select class="inp" :value="d.iterations" @change="patch('iterations', +$event.target.value)"><option :value="7000">7,000</option><option :value="30000">30,000</option><option :value="60000">60,000</option></select></div><div class="field"><label>SH 阶数</label><select class="inp" :value="d.sh" @change="patch('sh', +$event.target.value)"><option :value="0">0</option><option :value="1">1</option><option :value="3">3</option></select></div>
-              <div class="field"><label>目标平台档位</label><select class="inp" :value="d.platform" @change="patch('platform', $event.target.value)"><option value="quest3">一体机（Quest / PICO）</option><option value="xr_space">PC 串流</option><option value="webxr">WebXR</option></select></div><div class="field"><label>splat 上限</label><input class="inp" type="number" data-draft :value="d.splat_limit" @change="patch('splat_limit', +$event.target.value)"></div></div>
+            <div class="grid g2"><div class="field"><label>位姿求解</label><select class="inp" :value="d.solver" :disabled="!canRecon" @change="patch('solver', $event.target.value)"><option value="colmap">COLMAP</option></select></div><div class="field"><label>训练引擎</label><select class="inp" :value="d.engine" :disabled="!canRecon" @change="patch('engine', $event.target.value)"><option value="lichtfeld">LichtFeld Studio CLI</option><option value="gsplat">gsplat</option></select></div>
+              <div class="field"><label>迭代次数</label><select class="inp" :value="d.iterations" :disabled="!canRecon" @change="patch('iterations', +$event.target.value)"><option :value="7000">7,000</option><option :value="30000">30,000</option><option :value="60000">60,000</option></select></div><div class="field"><label>SH 阶数</label><select class="inp" :value="d.sh" :disabled="!canRecon" @change="patch('sh', +$event.target.value)"><option :value="0">0</option><option :value="1">1</option><option :value="3">3</option></select></div>
+              <div class="field"><label>目标平台档位</label><select class="inp" :value="d.platform" :disabled="!canRecon" @change="patch('platform', $event.target.value)"><option value="quest3">一体机（Quest / PICO）</option><option value="xr_space">PC 串流</option><option value="webxr">WebXR</option></select></div><div class="field"><label>splat 上限</label><input class="inp" type="number" data-draft :value="d.splat_limit" :disabled="!canRecon" @change="patch('splat_limit', +$event.target.value)"></div></div>
             <div class="kv small"><div>预计训练</div><div>{{ U.dur(est) }}</div><div>执行方式</div><div><select class="inp" v-model="mode"><option value="auto">{{ est>3600 ? '自动（超过 60 分钟排入夜间窗口）' : '自动（立即执行）' }}</option><option value="now">立即执行</option><option value="night">夜间窗口 22:00–07:00</option><option value="cloud">云端</option></select></div></div>
-            <button class="btn primary" :disabled="d.status!=='posed'" @click="train" id="btn-train">开始训练</button>
+            <button class="btn primary" :disabled="!canRecon || d.status!=='posed'" @click="train" id="btn-train">开始训练</button>
           </div></div>
           <div class="panel"><header><h3>训练进度</h3><span class="sub" v-if="task">{{ task.code }} · {{ D.TASK_STATUS[task.status] }}{{ task.priority==='night'?'（夜间）':'' }}</span></header><div class="body stack">
             <template v-if="task && task.node==='gs_train'"><c-progress :v="task.progress"></c-progress><div class="kv small"><div>迭代</div><div class="num">{{ U.n(task.metrics.iteration||0) }} / {{ U.n(task.params.iterations) }}</div><div>PSNR</div><div class="num">{{ task.metrics.psnr || '—' }} dB</div><div>显存</div><div>{{ task.vram_peak ? task.vram_peak.toFixed(1)+' GB' : '—' }}</div><div>剩余</div><div>{{ U.dur(task.duration-task.elapsed) }}</div></div><c-line :values="psnr[d.id]||[]" :min="15" :max="32" :height="70"></c-line></template>
@@ -175,7 +183,7 @@
           <div class="panel"><header><h3>导出</h3></header><div class="body stack">
             <div class="seg"><button v-for="x in [['spz','SPZ'],['ply','PLY'],['gltf','glTF + KHR_gaussian_splatting']]" :key="x[0]" :class="{on: exportFmt===x[0]}" @click="exportFmt=x[0]">{{ x[1] }}</button></div>
             <div class="note warn small" v-if="!capOk">采集记录未填写完整时不能导出。</div>
-            <button class="btn primary" :disabled="d.status!=='trained'" @click="doExport" id="btn-recon-export">导出并送入质检</button>
+            <button class="btn primary" :disabled="!canRecon || d.status!=='trained'" @click="doExport" id="btn-recon-export">导出并送入质检</button>
           </div></div>
         </div>
       </div>

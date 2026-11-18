@@ -60,7 +60,11 @@
     for (const file of inputFiles) {
       const form = new FormData(); form.append('file', file);
       const response = await fetch('/api/v1/files', { method: 'POST', headers: { Authorization: 'Bearer ' + net.token }, body: form });
-      const data = await response.json(); if (!response.ok) throw new Error(data.detail || '上传失败'); result.push(data);
+    const data = await response.json().catch(() => null);
+    if (!response.ok || !data?.file_id) {
+      throw new Error(data?.detail || (response.status === 413 ? '文件超过服务器上传限制' : `上传失败（HTTP ${response.status}）`));
+    }
+    result.push(data);
     }
     return result;
   }
@@ -241,7 +245,13 @@
         </div>
       </nav>
       <main class="main">
-        <c-locked v-if="locked" :ver="item.ver" style="margin:18px"></c-locked>
+        <div v-if="locked && st.production && item.r==='recon'" class="page">
+          <div class="panel locked"><h3>实景重建暂未接入</h3>
+            <p>还原文物本体需要覆盖不同角度的照片或视频。只有一张图时，可以把它作为展陈道具或文物风格资产的创意参考。</p>
+            <button class="btn primary" @click="go('jobs',{create:true,reference:true})">新建单图参考需求</button>
+          </div>
+        </div>
+        <c-locked v-else-if="locked" :ver="item.ver" style="margin:18px"></c-locked>
         <div v-else-if="item.admin && role!=='admin'" class="page"><div class="panel locked"><h3>仅管理员可访问系统设置</h3><p>请在右上角切换为管理员账号。</p></div></div>
         <component v-else :is="pageComp" :key="st.route"></component>
       </main>

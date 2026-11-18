@@ -21,13 +21,13 @@ def info(port):
     with urllib.request.urlopen(f'http://127.0.0.1:{port}/api/v1/info',timeout=5) as r:return json.load(r)
 
 
-def wait_ready(port):
+def wait_ready(port, version):
     for _ in range(40):
         try:
             data=info(port)
-            if data['version']=='1.1.0':
+            if data['version']==version:
                 with urllib.request.urlopen(f'http://127.0.0.1:{port}/showcase/catalog',timeout=8) as r:catalog=json.load(r)
-                assert catalog['version']=='1.1.0' and len(catalog['variants'])==2
+                assert catalog['version']==version and len(catalog['variants'])==2
                 return
         except (OSError,ValueError,AssertionError):pass
         time.sleep(.5)
@@ -66,8 +66,9 @@ def main():
     (root/'previous-container.json').write_text(json.dumps(old));os.chmod(root/'previous-container.json',0o600)
     env['SCW_MODE']='demo'
     envfile=root/'runtime.env';envfile.write_text('\n'.join(k+'='+v for k,v in env.items())+'\n');os.chmod(envfile,0o600)
-    image='spatial-content-works:1.1.0-'+stamp
     code=Path(__file__).resolve().parents[2]
+    version = (code / 'VERSION').read_text().strip()
+    image=f'spatial-content-works:{version}-{stamp}'
     subprocess.run(['docker','build','-t',image,str(code)],check=True)
     preview='scw-preview-'+stamp;final='scw-v110-'+stamp;switched=False;stopped=False;created=False
     def create(name,folder,bindings):
@@ -80,7 +81,7 @@ def main():
     try:
         # Preview a copy so migrations cannot touch the live data.
         previewdata=root/'preview-data';docker('cp',oldid+':/data',str(previewdata))
-        create(preview,previewdata,[f'127.0.0.1:{a.preview_port}:8000']);docker('start',preview);wait_ready(a.preview_port)
+        create(preview,previewdata,[f'127.0.0.1:{a.preview_port}:8000']);docker('start',preview);wait_ready(a.preview_port, version)
         docker('stop',preview)
         # Stop before the final copy, producing a consistent backup and leaving old data untouched.
         docker('stop',oldid);stopped=True
@@ -93,9 +94,9 @@ def main():
                 ip=value.get('HostIp') or '0.0.0.0'
                 if ':' in ip:ip='['+ip+']'
                 bindings.append(f"{ip}:{value['HostPort']}:8000")
-        create(final,data,bindings);created=True;docker('start',final);wait_ready(port);switched=True
+        create(final,data,bindings);created=True;docker('start',final);wait_ready(port, version);switched=True
         rollback=root/'rollback.sh';rollback.write_text('#!/bin/sh\nset -eu\ndocker stop '+final+'\ndocker start '+oldid+'\n');os.chmod(rollback,0o700)
-        print(json.dumps({'version':'1.1.0','container':final,'rollback':str(rollback),'domain_verification':'Run tools/verify_public_demo.py after the switch'}))
+        print(json.dumps({'version':version,'container':final,'rollback':str(rollback),'domain_verification':'Run tools/verify_public_demo.py after the switch'}))
     finally:
         subprocess.run(['docker','stop',preview],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
         if stopped and not switched:

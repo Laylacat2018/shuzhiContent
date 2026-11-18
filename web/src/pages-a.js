@@ -63,7 +63,7 @@
       const mode = ref(st.params.create ? 'new' : 'list');
       const sel = ref(null);
       const step = ref(0);
-      const blank = () => ({ title: '', project_id: E.S.currentProjectId, quantity: 20, description: '', ref_images: [], content_type: 'prop', platforms: (E.project().default_platforms || ['quest3']).slice(), usage_scope: E.project().usage_scope, style_lora: '', is_heritage: null, models: {} });
+      const blank = () => ({ title: '', project_id: E.S.currentProjectId, quantity: st.params.reference ? 1 : 20, description: '', ref_images: [], content_type: 'prop', platforms: (E.project().default_platforms || ['quest3']).slice(), usage_scope: E.project().usage_scope, style_lora: '', is_heritage: null, models: {}, ai_restore: false });
       const f = reactive(blank());
       const editing = ref(null);
       const pre = computed(() => { st.rev; try { return E.precheck(Object.assign({}, f, { is_heritage: !!f.is_heritage })); } catch (e) { return null; } });
@@ -77,22 +77,44 @@
       const stepNames = ['基本信息', '内容类型', '目标平台', '管线模板', '确认提交'];
       const next = () => { if (step.value === 0 && !f.title) return toast('请填写需求名称', 'err'); if (step.value === 1 && f.is_heritage === null) return toast('“是否文物本体”为必填项', 'err'); if (step.value === 2 && !f.platforms.length) return toast('请至少选择一个目标平台', 'err'); step.value = Math.min(4, step.value + 1); };
       const togglePlat = (p) => { const i = f.platforms.indexOf(p); i >= 0 ? f.platforms.splice(i, 1) : f.platforms.push(p); };
-      const onRef = async (e) => { try { f.ref_images = E.S.runtime?.mode === 'production' ? await global.SCW.uploadFiles(e.target.files) : [...e.target.files].map(x => x.name); } catch (err) { toast(err.message, 'err'); } };
+      const uploadingRef = ref(false);
+      const refError = ref('');
+      const onRef = async (event) => {
+        const input = event.target;
+        const file = input.files[0];
+        if (!file || uploadingRef.value) return;
+        uploadingRef.value = true;
+        refError.value = '';
+        try {
+          f.ref_images = st.production ? await global.SCW.uploadFiles([file]) : [file.name];
+        } catch (error) {
+          refError.value = error.message;
+        } finally {
+          uploadingRef.value = false;
+          input.value = '';
+        }
+      };
       const save = (submit) => {
-        const payload = JSON.parse(JSON.stringify(f));
+        if (uploadingRef.value) return toast('请等待参考图上传完成', 'err');
+        const payload = Object.fromEntries(Object.keys(blank()).filter(key => !st.production || key !== 'models').map(key => [key, f[key]]));
         const j = act(() => { let job; if (editing.value) job = E.updateJob(editing.value, payload); else job = E.createJob(payload); if (submit) E.submitJob(job.id); return job; }, submit ? (j) => `已提交 ${j.code}，任务已拆分进入队列` : '已存为草稿');
         if (j) { mode.value = 'list'; sel.value = j.id; Object.assign(f, blank()); step.value = 0; editing.value = null; }
       };
-      const newJob = () => { Object.assign(f, blank()); step.value = 0; editing.value = null; mode.value = 'new'; };
-      const editDraft = (j) => { Object.assign(f, JSON.parse(JSON.stringify(j))); f.models = j.models || {}; editing.value = j.id; step.value = 0; mode.value = 'new'; };
+      const newJob = () => { Object.assign(f, blank()); refError.value = ''; step.value = 0; editing.value = null; mode.value = 'new'; };
+      const editDraft = (j) => {
+        const draft = blank();
+        for (const key of Object.keys(draft)) if (Object.hasOwn(j, key)) draft[key] = JSON.parse(JSON.stringify(j[key]));
+        Object.assign(f, draft);
+        refError.value = ''; editing.value = j.id; step.value = 0; mode.value = 'new';
+      };
       const submitDraft = (j) => act(() => E.submitJob(j.id), '已提交并拆分任务');
       const nodeOptions = (type) => E.modelsFor(type, Object.assign({}, E.project(f.project_id), { usage_scope: f.usage_scope }));
       const templateExample = 'concept → pick(人工) → gen3d → optimize → qa → review(人工)';
-      return { mode, sel, step, f, pre, jobs, cur, curTasks, curAssets, loras, stepNames, next, togglePlat, onRef, save, newJob, editDraft, submitDraft, nodeOptions, templateExample, E, D, U, st, go, act };
+      return { mode, sel, step, f, pre, jobs, cur, curTasks, curAssets, loras, stepNames, next, togglePlat, onRef, uploadingRef, refError, save, newJob, editDraft, submitDraft, nodeOptions, templateExample, E, D, U, st, go, act };
     },
     template: `<div class="page" :data-r="st.rev">
       <c-head code="P02" ver="V1.0" title="需求单" goal="用表单描述要生产的内容，由平台匹配管线并做合规预检。">
-        <button class="btn" v-if="mode==='new'" @click="mode='list'">返回列表</button>
+        <button class="btn" v-if="mode==='new'" :disabled="uploadingRef" @click="mode='list'">返回列表</button>
         <button class="btn primary" v-else @click="newJob" id="btn-new-job">新建需求单</button>
       </c-head>
       <template v-if="mode==='new'">
@@ -104,7 +126,14 @@
                 <div class="field"><label class="req" for="job-title">需求名称</label><input id="job-title" class="inp" v-model="f.title" placeholder="例：展厅陪衬道具 · 青铜器与宫灯"></div>
                 <div class="field"><label for="job-project">所属项目</label><select id="job-project" class="inp" v-model="f.project_id"><option v-for="p in E.S.projects" :value="p.id" :key="p.id">{{ p.name }}</option></select></div>
                 <div class="field"><label for="job-qty">数量（件）</label><input id="job-qty" class="inp" type="number" min="1" max="500" v-model.number="f.quantity"></div>
-                <div class="field"><label for="job-ref">参考图上传</label><input id="job-ref" class="inp" type="file" multiple accept="image/*" @change="onRef"><span class="faint small" v-if="f.ref_images.length">{{ f.ref_images.map(x=>x.name||x).join('、') }}</span></div>
+                <div class="field">
+                  <label for="job-ref">{{ st.production ? '上传参考图' : '参考图文件名演示' }}</label>
+                  <input id="job-ref" class="inp" type="file" accept=".png,.jpg,.jpeg,.webp" :disabled="uploadingRef" @change="onRef">
+                  <span class="faint small">{{ st.production ? '支持一张 PNG、JPEG 或 WebP，用于生成道具概念图。' : '当前是流程演示，仅记录文件名。真实生成请使用生产环境。' }}</span>
+                  <span v-if="uploadingRef" class="small" role="status">正在上传参考图…</span>
+                  <span v-else-if="f.ref_images.length" class="small" role="status">{{ st.production ? '已上传' : '已记录文件名' }}：{{ f.ref_images[0].name||f.ref_images[0] }} <button class="btn sm" type="button" @click="f.ref_images=[];refError=''">移除</button></span>
+                  <span v-if="refError" class="note err small" role="alert">{{ refError }}</span>
+                </div>
               </div>
               <div class="field"><label for="job-desc">需求描述（将预填为概念图提示词）</label><textarea id="job-desc" class="inp" rows="4" v-model="f.description" placeholder="例：商周风格青铜鼎与明清宫灯，陪衬展柜两侧，写实 PBR 材质"></textarea></div>
             </template>
@@ -129,7 +158,7 @@
               <div class="row"><b>{{ pre.template_name }}</b><span class="tag mono">{{ pre.template }}</span><span class="faint small">按内容类型与目标平台自动匹配</span></div>
               <div class="tbl-wrap"><table class="tbl"><thead><tr><th>节点</th><th>模型 / 工具</th><th>队列</th><th class="r">显存</th><th class="r">单件耗时</th></tr></thead><tbody>
                 <tr v-for="n in pre.nodes" :key="n.id"><td>{{ n.name }}<span v-if="n.human" class="tag" style="margin-left:6px">人工节点</span></td>
-                  <td><template v-if="!n.human && n.model && nodeOptions(n.type).length>1"><select class="inp" style="max-width:280px" :value="n.model" @change="f.models[n.type]=$event.target.value"><option v-for="o in nodeOptions(n.type)" :key="o.m.id" :value="o.m.id" :disabled="!o.ok">{{ o.m.name }}{{ o.ok ? '' : '（不可用：'+o.reason+'）' }}</option></select></template><template v-else>{{ n.model_name || (n.human ? '—' : '无可用模型') }}</template></td>
+                  <td><template v-if="!st.production && !n.human && n.model && nodeOptions(n.type).length>1"><select class="inp" style="max-width:280px" :value="n.model" @change="f.models[n.type]=$event.target.value"><option v-for="o in nodeOptions(n.type)" :key="o.m.id" :value="o.m.id" :disabled="!o.ok">{{ o.m.name }}{{ o.ok ? '' : '（不可用：'+o.reason+'）' }}</option></select></template><template v-else>{{ n.model_name || (n.human ? '—' : '无可用模型') }}</template></td>
                   <td>{{ n.queue || '—' }}</td><td class="r">{{ n.vram ? n.vram+' GB' : '—' }}</td><td class="r">{{ n.unit_s ? U.dur(n.unit_s) : '—' }}</td></tr></tbody></table></div>
             </template>
             <template v-if="step===4 && pre">
