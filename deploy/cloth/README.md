@@ -15,6 +15,8 @@
 | `Dockerfile` | 容器方式（备选，未在本仓库环境中构建验证） |
 | `cloth.caddy` | Caddy 站点：HTTPS、basic_auth 访问控制、反向代理到 127.0.0.1:8790 |
 | `preflight.sh` | 只读检查主机、Caddy、端口与解析 |
+| `install.sh` | 一键安装 / 更新 / 重设密码 |
+| `qwen/` | 本次测试使用的 Qwen 本地生图脚本 |
 
 与 claude.ai 版的差异：
 
@@ -22,7 +24,17 @@
 - 第④步“AI 专家评审”不可用（需要 Claude 运行环境），可手动逐项打分；已导入的评审记录照常显示。
 - 整站由 Caddy basic_auth 保护，只有拿到账号密码的人能访问和上传。
 
-## 部署步骤（在腾讯云主机上执行）
+## 一键安装（推荐）
+
+登录腾讯云主机（SSH 或控制台“登录”网页终端），在仓库目录执行：
+
+```bash
+git fetch origin claude/vibrant-cannon-51pg7i && git checkout FETCH_HEAD -- deploy/cloth && sudo bash deploy/cloth/install.sh
+```
+
+脚本会安装并启动服务、询问访问账号和密码、生成 Caddy 站点并校验后加载（校验失败自动恢复原 Caddyfile），最后打印本机公网地址和 DNS 需要添加的记录。之后只需在 DNSPod 添加 `cloth` 的 A 记录。重设密码：`sudo bash deploy/cloth/install.sh --password`。
+
+## 手动部署步骤（与一键安装等价）
 
 1. 获取代码（仓库已在主机上时）：
 
