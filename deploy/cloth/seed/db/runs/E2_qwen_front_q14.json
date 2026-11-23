@@ -1,0 +1,88 @@
+{
+ "assetId": "5de50c886f75ef233b4523cae2b82e04",
+ "createdAt": 1795450634001,
+ "durationSec": 101,
+ "fileName": "outputs_v4/E2_qwen_front_6.png",
+ "group": "E2",
+ "id": "E2_qwen_front_q14",
+ "model": "qwen",
+ "override": {},
+ "promptVersion": "v4",
+ "review": {
+  "annotations": [],
+  "at": 1795450634001,
+  "completeness": 2,
+  "forbidden": [
+   {
+    "item": "盘扣",
+    "where": "前襟两处"
+   },
+   {
+    "item": "背心式霞帔（疑似）",
+    "where": "领口宽片"
+   }
+  ],
+  "reviewer": "Claude（模拟专家，按 C1–C10 人工判读）",
+  "revisions": [],
+  "scores": [
+   {
+    "id": "C1",
+    "reason": "正红",
+    "score": 2
+   },
+   {
+    "id": "C2",
+    "reason": "有绗缝纹理",
+    "score": 1
+   },
+   {
+    "id": "C3",
+    "reason": "前襟用扣子扣合",
+    "score": 0
+   },
+   {
+    "id": "C4",
+    "reason": "宽袖下垂",
+    "score": 1
+   },
+   {
+    "id": "C5",
+    "reason": "只有领口一圈宽片，不下垂",
+    "score": 0
+   },
+   {
+    "id": "C6",
+    "reason": "无",
+    "score": 0
+   },
+   {
+    "id": "C7",
+    "reason": "无",
+    "score": 0
+   },
+   {
+    "id": "C8",
+    "reason": "无",
+    "score": 0
+   },
+   {
+    "id": "C9",
+    "reason": "看不到内袍",
+    "score": 0
+   },
+   {
+    "id": "C10",
+    "reason": "无白色交领与白带",
+    "score": 0
+   }
+  ],
+  "summary": "本轮最差：带头人台、斜侧、盘扣、无霞帔与坠子。“照片化”提示词让模型退回到通用红袍的样子。",
+  "verdict": "重新生成",
+  "view_ok": true
+ },
+ "seed": 1049799261,
+ "selected": false,
+ "specVersion": "V1",
+ "variant": "Qwen-Image-Edit-2509 fp8 · 本地ComfyUI · v4 结构约束 + 裁剪 + 照片化 · seed 1049799261 · 30步 CFG4",
+ "view": "front"
+}

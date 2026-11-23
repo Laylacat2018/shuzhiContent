@@ -1,0 +1,118 @@
+{
+ "assetId": "71d87b1557e1f1f94c2ea73bd7508d97",
+ "createdAt": 1795420483958,
+ "durationSec": null,
+ "fileName": "4.jpg",
+ "group": "E2",
+ "id": "E2_nb2_front_m4",
+ "model": "nb2",
+ "override": {},
+ "review": {
+  "annotations": [
+   {
+    "label": "霞帔纹样为对翟（凤）纹，需专家判定蟒纹或翟纹",
+    "severity": "doubt",
+    "x": 50,
+    "y": 60
+   },
+   {
+    "label": "坠子尺寸偏大",
+    "severity": "doubt",
+    "x": 50,
+    "y": 89
+   },
+   {
+    "label": "人台带手臂，规格书要求无手人台",
+    "severity": "doubt",
+    "x": 40,
+    "y": 36
+   },
+   {
+    "label": "胸前内袍龙首与画像一致",
+    "severity": "ok",
+    "x": 46,
+    "y": 15
+   }
+  ],
+  "at": 1795420543958,
+  "completeness": 2,
+  "forbidden": [],
+  "reviewer": "Claude（模拟专家）",
+  "revisions": [
+   {
+    "change": "霞帔纹样以云霞翟纹（成对翟鸟）为主，龙形蟒纹只出现在胸前内袍上（专家判定：画像霞帔下段纹样与会典“云霞翟纹”相合）",
+    "field": "F5",
+    "reason": "统一画像与文献"
+   },
+   {
+    "change": "坠子宽度约为霞帔宽度的三分之一",
+    "field": "F6",
+    "reason": "Nano Banana 坠子过大"
+   },
+   {
+    "change": "人台为无头、无手臂白色人台；白带自腰前自然垂下",
+    "field": "F1",
+    "reason": "统一呈现方式"
+   }
+  ],
+  "scores": [
+   {
+    "id": "C1",
+    "reason": "鲜亮正红，与画像一致",
+    "score": 2
+   },
+   {
+    "id": "C2",
+    "reason": "素面",
+    "score": 2
+   },
+   {
+    "id": "C3",
+    "reason": "对襟清楚，前襟与领缘有细金边",
+    "score": 2
+   },
+   {
+    "id": "C4",
+    "reason": "宽大垂袖，袖口垂至大腿以下",
+    "score": 2
+   },
+   {
+    "id": "C5",
+    "reason": "霞帔居中自胸前垂至近地，金地五彩",
+    "score": 2
+   },
+   {
+    "id": "C6",
+    "reason": "霞帔上纹样为成对的翟鸟（凤）与云纹，龙形只见于内袍胸前；与规格书“蟒纹”不一致，但与会典“云霞翟纹”相合",
+    "score": 1
+   },
+   {
+    "id": "C7",
+    "reason": "下段海水江崖、末端收尖",
+    "score": 2
+   },
+   {
+    "id": "C8",
+    "reason": "金色水滴形坠子，但尺寸偏大",
+    "score": 2
+   },
+   {
+    "id": "C9",
+    "reason": "胸前与两侧下摆可见金地五彩内袍，两侧蓝色饰片与画像一致",
+    "score": 2
+   },
+   {
+    "id": "C10",
+    "reason": "交领白护领；白带由双手执持下垂，与画像手持姿态一致",
+    "score": 2
+   }
+  ],
+  "summary": "四张中结构最正确：对襟大衫、居中霞帔、内袍分层、两侧蓝色饰片和手持白带都与画像对得上。唯一的学术问题是霞帔纹样画成了对翟纹，恰好对应文献记载，这一点需要专家在规格书 F5 上作出判定。选为 V1 最佳候选。",
+  "verdict": "通过",
+  "view_ok": true
+ },
+ "selected": true,
+ "specVersion": "V1",
+ "variant": "Nano Banana",
+ "view": "front"
+}

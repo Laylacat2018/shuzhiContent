@@ -1,0 +1,107 @@
+{
+ "assetId": "3bab5fed0e6018f9c550a6d6c9f6bf4e",
+ "createdAt": 1795420483956,
+ "durationSec": null,
+ "fileName": "2.webp",
+ "group": "E2",
+ "id": "E2_sd_front_m2",
+ "model": "sd",
+ "override": {},
+ "review": {
+  "annotations": [
+   {
+    "label": "霞帔斜挂单肩，应居中下垂",
+    "severity": "error",
+    "x": 63,
+    "y": 30
+   },
+   {
+    "label": "红色偏暗",
+    "severity": "doubt",
+    "x": 15,
+    "y": 50
+   },
+   {
+    "label": "内袍胸前蟒纹，明代蟒袍布局合理",
+    "severity": "ok",
+    "x": 45,
+    "y": 20
+   }
+  ],
+  "at": 1795420543956,
+  "completeness": 2,
+  "forbidden": [],
+  "reviewer": "Claude（模拟专家）",
+  "revisions": [
+   {
+    "change": "霞帔必须居中垂于身前正中、左右对称，不可斜挂单肩",
+    "field": "F4",
+    "reason": "Seedream 两张均斜挂"
+   },
+   {
+    "change": "大衫红色为鲜亮正红，参照画像色相，不得偏暗红或酒红",
+    "field": "F2",
+    "reason": "Seedream 红色偏暗"
+   }
+  ],
+  "scores": [
+   {
+    "id": "C1",
+    "reason": "红色偏暗，接近酒红，画像为鲜亮正红",
+    "score": 1
+   },
+   {
+    "id": "C2",
+    "reason": "素面，仅有暗花质感",
+    "score": 2
+   },
+   {
+    "id": "C3",
+    "reason": "对襟清楚，前襟细金边",
+    "score": 2
+   },
+   {
+    "id": "C4",
+    "reason": "宽大垂袖，垂过膝",
+    "score": 2
+   },
+   {
+    "id": "C5",
+    "reason": "霞帔只有一条，斜挂在右肩，偏离身前正中",
+    "score": 0
+   },
+   {
+    "id": "C6",
+    "reason": "霞帔与内袍均有龙、凤与云纹",
+    "score": 2
+   },
+   {
+    "id": "C7",
+    "reason": "下段海水江崖、末端收尖",
+    "score": 2
+   },
+   {
+    "id": "C8",
+    "reason": "金色水滴形坠子",
+    "score": 2
+   },
+   {
+    "id": "C9",
+    "reason": "内袍为金地蟒袍，胸前大蟒与膝襕布局像明代实物",
+    "score": 2
+   },
+   {
+    "id": "C10",
+    "reason": "交领白护领，白带自腰前垂下",
+    "score": 2
+   }
+  ],
+  "summary": "织物质感和内袍形制最接近明代实物照片，蟒袍的胸前大蟒与膝襕布局值得保留。但霞帔被做成单肩斜挂的绶带，这是结构性错误；规格书已写明居中下垂，属于模型没做到，需加强提示后重新生成。",
+  "verdict": "重新生成",
+  "view_ok": true
+ },
+ "selected": false,
+ "specVersion": "V1",
+ "variant": "Seedream",
+ "view": "front"
+}

@@ -1,0 +1,79 @@
+{
+ "assetId": "2d244a60b02d9cef7af8b542fc75266a",
+ "createdAt": 1795450633993,
+ "durationSec": 99,
+ "fileName": "outputs_v3/E2_qwen_front_2.png",
+ "group": "E2",
+ "id": "E2_qwen_front_q06",
+ "model": "qwen",
+ "override": {},
+ "promptVersion": "v3",
+ "review": {
+  "annotations": [],
+  "at": 1795450633993,
+  "completeness": 0,
+  "forbidden": [],
+  "reviewer": "Claude（模拟专家，按 C1–C10 人工判读）",
+  "revisions": [],
+  "scores": [
+   {
+    "id": "C1",
+    "reason": "与画像一致",
+    "score": 2
+   },
+   {
+    "id": "C2",
+    "reason": "素面",
+    "score": 2
+   },
+   {
+    "id": "C3",
+    "reason": "对襟金边",
+    "score": 2
+   },
+   {
+    "id": "C4",
+    "reason": "坐姿堆叠",
+    "score": 1
+   },
+   {
+    "id": "C5",
+    "reason": "居中金地五彩",
+    "score": 2
+   },
+   {
+    "id": "C6",
+    "reason": "同画像",
+    "score": 1
+   },
+   {
+    "id": "C7",
+    "reason": "同画像",
+    "score": 2
+   },
+   {
+    "id": "C8",
+    "reason": "同画像",
+    "score": 2
+   },
+   {
+    "id": "C9",
+    "reason": "同画像",
+    "score": 2
+   },
+   {
+    "id": "C10",
+    "reason": "同画像",
+    "score": 1
+   }
+  ],
+  "summary": "基本是把裁剪后的画像原样重绘：绘画质感、无人台、底边带地毯，不是实物复原照。分数反映的是与画像的一致性，不代表复原成功。该种子不宜再用。",
+  "verdict": "重新生成",
+  "view_ok": true
+ },
+ "seed": 2081972815,
+ "selected": false,
+ "specVersion": "V1",
+ "variant": "Qwen-Image-Edit-2509 fp8 · 本地ComfyUI · v3 结构约束 + 画像裁剪 · seed 2081972815 · 30步 CFG4",
+ "view": "front"
+}

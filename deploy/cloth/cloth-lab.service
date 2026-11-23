@@ -1,0 +1,19 @@
+# 衣冠复原实验台服务。安装：sudo cp cloth-lab.service /etc/systemd/system/ && sudo systemctl enable --now cloth-lab
+[Unit]
+Description=Cloth restoration lab (cloth.migucomi.com)
+After=network-online.target
+
+[Service]
+ExecStart=/usr/bin/python3 /opt/cloth-lab/server.py
+Environment=CLOTH_DATA=/var/lib/cloth-lab CLOTH_BIND=127.0.0.1 CLOTH_PORT=8790
+DynamicUser=yes
+StateDirectory=cloth-lab
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+NoNewPrivileges=yes
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

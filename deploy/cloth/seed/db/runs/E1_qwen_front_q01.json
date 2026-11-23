@@ -1,0 +1,84 @@
+{
+ "assetId": "ebf5868a482d515253de961e57b03cdf",
+ "createdAt": 1795450633988,
+ "durationSec": 144,
+ "fileName": "outputs/E1_qwen_front_1.png",
+ "group": "E1",
+ "id": "E1_qwen_front_q01",
+ "model": "qwen",
+ "override": {},
+ "promptVersion": "r1",
+ "review": {
+  "annotations": [],
+  "at": 1795450633988,
+  "completeness": 2,
+  "forbidden": [
+   {
+    "item": "日式和服元素（疑似）",
+    "where": "横撑的袖子与白色袖口衬边"
+   }
+  ],
+  "reviewer": "Claude（模拟专家，按 C1–C10 人工判读）",
+  "revisions": [],
+  "scores": [
+   {
+    "id": "C1",
+    "reason": "橙红，不是真红",
+    "score": 1
+   },
+   {
+    "id": "C2",
+    "reason": "缎面有暗纹光泽，不算纯素面",
+    "score": 1
+   },
+   {
+    "id": "C3",
+    "reason": "前襟敞开，有金边",
+    "score": 2
+   },
+   {
+    "id": "C4",
+    "reason": "袖子横向撑开成 T 字形，未自然下垂",
+    "score": 1
+   },
+   {
+    "id": "C5",
+    "reason": "居中，但两带收成 V 形尖角，非平行下垂",
+    "score": 1
+   },
+   {
+    "id": "C6",
+    "reason": "金地，有成对禽鸟（翟）纹与五彩云纹，无蟒纹",
+    "score": 1
+   },
+   {
+    "id": "C7",
+    "reason": "末端收尖；海水纹画在内层百褶裙上，霞帔上无海水江崖",
+    "score": 1
+   },
+   {
+    "id": "C8",
+    "reason": "尖角下有金色水滴坠子；但两袖角多挂两个坠子",
+    "score": 2
+   },
+   {
+    "id": "C9",
+    "reason": "内袍为绿色，不见金地蟒纹",
+    "score": 0
+   },
+   {
+    "id": "C10",
+    "reason": "白色交领有；无腰前白带",
+    "score": 1
+   }
+  ],
+  "summary": "只用规格书文生图。霞帔金地翟纹较好，但大衫偏橙、袖子横撑带日式装束感，内袍错成绿色，袖角多出坠子。",
+  "verdict": "重新生成",
+  "view_ok": true
+ },
+ "seed": 538586208,
+ "selected": false,
+ "specVersion": "V1",
+ "variant": "Qwen-Image fp8 · 本地ComfyUI · 第1轮提示词（无裁剪） · seed 538586208 · 30步 CFG4",
+ "view": "front"
+}

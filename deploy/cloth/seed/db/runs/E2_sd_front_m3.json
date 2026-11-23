@@ -1,0 +1,96 @@
+{
+ "assetId": "5d3fd6d33bf72139656b22825e215185",
+ "createdAt": 1795420483957,
+ "durationSec": null,
+ "fileName": "3.webp",
+ "group": "E2",
+ "id": "E2_sd_front_m3",
+ "model": "sd",
+ "override": {},
+ "review": {
+  "annotations": [
+   {
+    "label": "霞帔斜挂左肩",
+    "severity": "error",
+    "x": 30,
+    "y": 35
+   },
+   {
+    "label": "内袍膝襕布局清楚",
+    "severity": "ok",
+    "x": 52,
+    "y": 44
+   }
+  ],
+  "at": 1795420543957,
+  "completeness": 2,
+  "forbidden": [],
+  "reviewer": "Claude（模拟专家）",
+  "revisions": [
+   {
+    "change": "内袍参照明代蟒袍：胸前一条大蟒，两袖有通袖襕，膝部有膝襕",
+    "field": "F7",
+    "reason": "Seedream 内袍形制可取，写入规格以便其他模型对齐"
+   }
+  ],
+  "scores": [
+   {
+    "id": "C1",
+    "reason": "红色偏暗",
+    "score": 1
+   },
+   {
+    "id": "C2",
+    "reason": "素面",
+    "score": 2
+   },
+   {
+    "id": "C3",
+    "reason": "对襟，前襟细金边",
+    "score": 2
+   },
+   {
+    "id": "C4",
+    "reason": "宽大垂袖",
+    "score": 2
+   },
+   {
+    "id": "C5",
+    "reason": "霞帔斜挂左肩，偏离正中",
+    "score": 0
+   },
+   {
+    "id": "C6",
+    "reason": "龙、凤与云纹齐全",
+    "score": 2
+   },
+   {
+    "id": "C7",
+    "reason": "海水江崖、末端收尖",
+    "score": 2
+   },
+   {
+    "id": "C8",
+    "reason": "金色坠子",
+    "score": 2
+   },
+   {
+    "id": "C9",
+    "reason": "内袍胸前蟒纹、通袖襕和膝襕清楚",
+    "score": 2
+   },
+   {
+    "id": "C10",
+    "reason": "交领白护领，白带下垂",
+    "score": 2
+   }
+  ],
+  "summary": "与上一张同一模型同一问题：霞帔斜挂。内袍的蟒纹与襕的布局在四张中最像明代实物。",
+  "verdict": "重新生成",
+  "view_ok": true
+ },
+ "selected": false,
+ "specVersion": "V1",
+ "variant": "Seedream",
+ "view": "front"
+}

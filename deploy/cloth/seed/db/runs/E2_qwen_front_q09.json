@@ -1,0 +1,79 @@
+{
+ "assetId": "c4671c838c6d16bf2cdb113f455fd737",
+ "createdAt": 1795450633996,
+ "durationSec": 119,
+ "fileName": "outputs_v4/E2_qwen_front_1.png",
+ "group": "E2",
+ "id": "E2_qwen_front_q09",
+ "model": "qwen",
+ "override": {},
+ "promptVersion": "v4",
+ "review": {
+  "annotations": [],
+  "at": 1795450633996,
+  "completeness": 2,
+  "forbidden": [],
+  "reviewer": "Claude（模拟专家，按 C1–C10 人工判读）",
+  "revisions": [],
+  "scores": [
+   {
+    "id": "C1",
+    "reason": "真红",
+    "score": 2
+   },
+   {
+    "id": "C2",
+    "reason": "素面",
+    "score": 2
+   },
+   {
+    "id": "C3",
+    "reason": "对襟金边清楚",
+    "score": 2
+   },
+   {
+    "id": "C4",
+    "reason": "两袖在胸前交叠，衣长只到小腿",
+    "score": 1
+   },
+   {
+    "id": "C5",
+    "reason": "从领口两侧下来，居中下垂，金地五彩",
+    "score": 2
+   },
+   {
+    "id": "C6",
+    "reason": "成对禽鸟纹与彩色云带，无蟒",
+    "score": 1
+   },
+   {
+    "id": "C7",
+    "reason": "末端浪花山石，收尖",
+    "score": 2
+   },
+   {
+    "id": "C8",
+    "reason": "一枚，正中，水滴形",
+    "score": 2
+   },
+   {
+    "id": "C9",
+    "reason": "衣下全是红色，内袍蟒纹消失",
+    "score": 0
+   },
+   {
+    "id": "C10",
+    "reason": "白色交领有；无腰前白带",
+    "score": 1
+   }
+  ],
+  "summary": "最像真实复原照的一张：人台、底座、白色交领、霞帔和单坠都对。但 v3 中露出的内袍蟒纹被“照片化”提示词冲掉，两袖交叠。",
+  "verdict": "重新生成",
+  "view_ok": true
+ },
+ "seed": 1234440434,
+ "selected": false,
+ "specVersion": "V1",
+ "variant": "Qwen-Image-Edit-2509 fp8 · 本地ComfyUI · v4 结构约束 + 裁剪 + 照片化 · seed 1234440434 · 30步 CFG4",
+ "view": "front"
+}

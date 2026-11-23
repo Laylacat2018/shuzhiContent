@@ -1,0 +1,558 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>衣冠复原实验台</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: 顶部流程条 + 左侧固定“依据栏”（国博画像/规格摘要）+ 右侧当前步骤工作区；窄屏上下堆叠 */
+:root{
+  --bg:#F3F5F8; --panel:#FFFFFF; --ink:#16202B; --muted:#5A6573; --line:#DCE2E9;
+  --navy:#12304F; --blue:#1790D0; --blue-soft:#E3F1FA; --blue-ink:#0E6DA3;
+  --cinnabar:#B23A2E; --cinnabar-soft:#FBE8E4;
+  --ok:#1B7A5A; --ok-soft:#E2F3EC; --warn:#9A5B0B; --warn-soft:#FCF0DC; --bad:#A2361F; --bad-soft:#FBE6E1;
+  --expert:#B5651D; --expert-soft:#FFF3E3;
+  --f-display:"Noto Serif SC","Songti SC",serif;
+  --f-body:"Noto Sans SC","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0F151C; --panel:#18212B; --ink:#E6EBF0; --muted:#9AA6B3; --line:#2B3744;
+  --navy:#0B1E33; --blue:#4DB0E8; --blue-soft:#142B3D; --blue-ink:#7CC6F0;
+  --cinnabar:#E07A6C; --cinnabar-soft:#341D1A;
+  --ok:#6FC6A1; --ok-soft:#14291F; --warn:#E3B062; --warn-soft:#2F2516; --bad:#EE8B76; --bad-soft:#33201B;
+  --expert:#E8A562; --expert-soft:#2E2417; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0F151C; --panel:#18212B; --ink:#E6EBF0; --muted:#9AA6B3; --line:#2B3744;
+  --navy:#0B1E33; --blue:#4DB0E8; --blue-soft:#142B3D; --blue-ink:#7CC6F0;
+  --cinnabar:#E07A6C; --cinnabar-soft:#341D1A;
+  --ok:#6FC6A1; --ok-soft:#14291F; --warn:#E3B062; --warn-soft:#2F2516; --bad:#EE8B76; --bad-soft:#33201B;
+  --expert:#E8A562; --expert-soft:#2E2417; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:14px;line-height:1.6;margin:0}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+h1,h2,h3{margin:0;text-wrap:balance}
+p{margin:0}
+.mono{font-family:var(--f-mono);font-size:12px}
+.muted{color:var(--muted)}
+/* header */
+.top{background:var(--navy);color:#fff}
+.top-in{max-width:1440px;margin:0 auto;padding-block:14px 0;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;gap:12px}
+.brand{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 16px}
+.brand h1{font-family:var(--f-display);font-weight:900;font-size:22px;letter-spacing:.04em}
+.brand .sub{font-size:13px;color:#C9D6E3}
+.brand .env{margin-left:auto;font-size:12px;background:rgba(255,255,255,.12);border-radius:999px;padding:3px 10px;color:#DCE8F3}
+.steps{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none}
+.steps a{flex:1 0 auto;display:flex;align-items:center;gap:8px;padding:10px 14px;color:#C9D6E3;text-decoration:none;border-bottom:3px solid transparent;font-size:14px;white-space:nowrap}
+.steps a .n{width:22px;height:22px;border-radius:50%;border:1px solid #6F8BA8;display:inline-flex;align-items:center;justify-content:center;font-size:12px}
+.steps a.on{color:#fff;border-bottom-color:var(--blue);font-weight:700}
+.steps a.on .n{background:var(--blue);border-color:var(--blue)}
+.steps a.done .n{background:#2E6B4F;border-color:#2E6B4F}
+.steps .ex{font-size:10px;color:#F3C58F;border:1px solid #8A6A45;border-radius:4px;padding:0 4px}
+/* layout */
+.wrap{max-width:1440px;margin:0 auto;padding-block:20px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;grid-template-columns:300px minmax(0,1fr);gap:20px;align-items:start}
+@media (max-width:900px){.wrap{grid-template-columns:1fr}}
+.ref{position:sticky;top:12px;display:grid;gap:12px}
+@media (max-width:900px){.ref{position:static}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
+.card h2{font-size:16px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.card h3{font-size:14px;margin-bottom:6px}
+.portrait{width:100%;border-radius:8px;display:block}
+.crops{display:grid;grid-template-columns:repeat(5,1fr);gap:4px}
+.crops canvas{width:100%;aspect-ratio:3/4;object-fit:cover;border-radius:4px;background:var(--bg)}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;font-size:13px}
+.kv dt{color:var(--muted)} .kv dd{margin:0}
+main{display:grid;gap:16px;min-width:0}
+.head{display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px 16px}
+.head h2{font-size:22px;font-family:var(--f-display);font-weight:900}
+.head p{color:var(--muted);max-width:68ch}
+.sp{flex:1}
+.pill{display:inline-flex;align-items:center;gap:4px;font-size:12px;border-radius:999px;padding:2px 10px;white-space:nowrap}
+.pill.expert{background:var(--expert-soft);color:var(--expert);border:1px solid color-mix(in srgb,var(--expert) 35%,transparent);font-weight:700}
+.tag{display:inline-block;font-size:12px;border-radius:6px;padding:1px 8px;white-space:nowrap}
+.L1{background:var(--ok-soft);color:var(--ok)}.L2{background:var(--blue-soft);color:var(--blue-ink)}.L3{background:var(--warn-soft);color:var(--warn)}.L4{background:var(--bad-soft);color:var(--bad)}.miss{background:var(--bg);color:var(--muted);border:1px solid var(--line)}.rule{background:var(--ink);color:var(--panel)}
+.btn{min-height:40px;padding:0 16px;border-radius:8px;border:1px solid var(--line);background:var(--panel);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap;text-decoration:none;color:var(--ink)}
+.btn:hover{border-color:var(--blue)}
+.btn.pri{background:var(--blue);border-color:var(--blue);color:#fff}
+.btn.ok{background:var(--ok);border-color:var(--ok);color:#fff}
+.btn.warn{color:var(--bad);border-color:var(--bad)}
+.btn.sm{min-height:32px;padding:0 10px;font-size:13px}
+.btn[disabled]{opacity:.5;cursor:not-allowed}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;padding:8px 10px;background:var(--bg);color:var(--muted);font-weight:700;font-size:12px;white-space:nowrap}
+td{padding:8px 10px;border-top:1px solid var(--line);vertical-align:top}
+.scroll{overflow-x:auto}
+.seg{display:flex;flex-wrap:wrap;gap:6px}
+.seg button{min-height:36px;padding:0 12px;border-radius:8px;border:1px solid var(--line);background:var(--panel);cursor:pointer;font-size:13px}
+.seg button.on{background:var(--ink);color:var(--panel);border-color:var(--ink)}
+.models{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+@media (max-width:700px){.models{grid-template-columns:1fr}}
+.model{border:1px solid var(--line);border-radius:10px;padding:14px;display:grid;gap:8px;cursor:pointer;background:var(--panel)}
+.model.on{border:2px solid var(--blue);padding:13px;background:var(--blue-soft)}
+.model b{font-size:15px}
+pre.prompt{white-space:pre-wrap;word-break:break-word;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:12px;font-size:12.5px;line-height:1.7;max-height:300px;overflow:auto;margin:0;font-family:var(--f-body)}
+.drop{border:2px dashed var(--line);border-radius:10px;padding:18px;text-align:center;color:var(--muted);display:grid;gap:8px;justify-items:center}
+.drop.over{border-color:var(--blue);background:var(--blue-soft)}
+.gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:12px}
+.shot{border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--panel);display:grid;cursor:pointer}
+.shot.sel{outline:2px solid var(--blue)}
+.shot .im{aspect-ratio:3/4;background:var(--bg);display:flex;align-items:center;justify-content:center;overflow:hidden}
+.shot img{width:100%;height:100%;object-fit:contain}
+.shot .meta{padding:8px 10px;display:grid;gap:4px;font-size:12px}
+.shot .row{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.score{font-weight:700;font-variant-numeric:tabular-nums}
+.empty{padding:28px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:10px}
+.two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
+@media (max-width:1100px){.two{grid-template-columns:1fr}}
+.stage{position:relative;background:var(--bg);border-radius:8px;overflow:hidden}
+.stage img{display:block;width:100%;max-height:640px;object-fit:contain}
+.mark{position:absolute;transform:translate(-50%,-50%);width:30px;height:30px;border-radius:50%;border:3px solid var(--bad);display:flex;align-items:center;justify-content:center}
+.mark span{position:absolute;top:-12px;right:-12px;background:var(--bad);color:#fff;font-size:11px;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700}
+.mark.doubt{border-color:var(--warn)} .mark.doubt span{background:var(--warn)}
+.mark.ok{border-color:var(--ok)} .mark.ok span{background:var(--ok)}
+.crit{display:grid;grid-template-columns:52px minmax(0,1fr) 96px;gap:4px 10px;align-items:start;padding:8px 0;border-top:1px solid var(--line);font-size:13px}
+.crit .bar{height:8px;border-radius:4px;background:var(--bg);overflow:hidden;margin-top:6px}
+.crit .bar i{display:block;height:100%;background:var(--blue)}
+.dots{display:flex;gap:4px}
+.dots button{width:28px;height:28px;border-radius:6px;border:1px solid var(--line);background:var(--panel);cursor:pointer;font-size:12px}
+.dots button.on{background:var(--blue);border-color:var(--blue);color:#fff}
+.verdict{font-size:15px;font-weight:700;padding:6px 14px;border-radius:8px}
+.v-pass{background:var(--ok-soft);color:var(--ok)} .v-spec{background:var(--warn-soft);color:var(--warn)} .v-regen{background:var(--bad-soft);color:var(--bad)}
+.note{font-size:12.5px;color:var(--muted)}
+.alert{border-radius:8px;padding:10px 12px;font-size:13px;background:var(--warn-soft);color:var(--warn)}
+.alert.info{background:var(--blue-soft);color:var(--blue-ink)}
+.stream{white-space:pre-wrap;font-size:12.5px;max-height:160px;overflow:auto;background:var(--bg);border-radius:8px;padding:10px;color:var(--muted)}
+.matrix td,.matrix th{text-align:center} .matrix td:first-child,.matrix th:first-child{text-align:left}
+.cell{display:grid;gap:4px;justify-items:center}
+.cbar{width:100%;max-width:120px;height:8px;background:var(--bg);border-radius:4px;overflow:hidden}
+.cbar i{display:block;height:100%;background:var(--blue)}
+.best{background:var(--ok-soft)}
+.diff li{margin-bottom:6px}
+.hash{word-break:break-all;background:var(--bg);border-radius:6px;padding:8px;font-family:var(--f-mono);font-size:12px}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--panel);padding:10px 16px;border-radius:8px;font-size:13px;z-index:20;max-width:90vw}
+label.f{display:grid;gap:4px;font-size:12.5px;color:var(--muted)}
+label.f input,label.f select{min-height:36px;border:1px solid var(--line);border-radius:8px;padding:0 10px;background:var(--panel)}
+.formrow{display:flex;flex-wrap:wrap;gap:10px;align-items:end}
+.vs{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.vs figure{margin:0;display:grid;gap:6px}
+.vs img{width:100%;border-radius:8px;background:var(--bg);aspect-ratio:3/4;object-fit:contain}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+
+<header class="top">
+  <div class="top-in">
+    <div class="brand">
+      <h1>衣冠 · AI复原实验台</h1>
+      <span class="sub">样本B · 明《李言恭配临淮侯夫人史氏像》命妇礼服 · 中国国家博物馆藏</span>
+      <span class="env" id="envState">正在连接存储与AI专家…</span>
+    </div>
+    <nav class="steps" id="steps" aria-label="复原流程"></nav>
+  </div>
+</header>
+
+<div class="wrap">
+  <aside class="ref" aria-label="复原依据">
+    <section class="card">
+      <h2>复原依据 <span class="tag L2">国博公开图像</span></h2>
+      <img class="portrait" id="portrait" src="shi.jpg" alt="《李言恭配临淮侯夫人史氏像》，明，中国国家博物馆藏">
+      <p class="note" style="margin-top:6px">来源：国博官网“岐阳世泽——中国国家博物馆藏李文忠家族文物展”专题页。407×709，正式复原需申请高清图。</p>
+    </section>
+    <section class="card">
+      <h3>局部放大</h3>
+      <div class="crops" id="crops"></div>
+    </section>
+    <section class="card" id="refSpec"></section>
+  </aside>
+
+  <main id="main"></main>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script src="claude-shim.js"></script>
+<script>
+/* ============ 静态数据：史料、规格书、提示词 ============ */
+const STEPS=[
+ {id:"source",n:1,t:"史料汇集",ex:true},{id:"spec",n:2,t:"形制规格书",ex:true},{id:"generate",n:3,t:"多模型生成"},
+ {id:"review",n:4,t:"专家评审",ex:true},{id:"compare",n:5,t:"对比选择"},{id:"revise",n:6,t:"修订 V2"},{id:"final",n:7,t:"定稿存证",ex:true}];
+const CROPS=[["冠",120,20,170,195],["上身",110,190,190,190],["霞帔下段",150,370,120,250],["左侧内袍",30,380,150,180],["右侧袖",250,330,150,230]];
+const OBS=[
+ ["冠","白色珠饰冠体，前额正中红色宝饰；冠顶青绿色（点翠类）扇形饰，中有粉白花形；两侧垂白色花形珠结，长及肩下","冠的名称与等级"],
+ ["外层大衫","真红，素面无纹，对襟，前襟细金边，袖极宽大垂过膝","是否为礼服“大衫”"],
+ ["前胸垂带","宽带自颈下垂至足前，金地满饰五彩云纹与龙形（蟒）纹，下段海水江崖，末端收尖，悬金色水滴形坠子","是否为霞帔；蟒纹还是文献所载云霞翟纹"],
+ ["内层袍服","领口、胸前与两侧下摆可见金地五彩织纹，胸前可见青色龙（蟒）首","内袍种类"],
+ ["领口与腰间","白色护领；一条白色长带自前腰垂下，右手持白色物","白带名称与用途"],
+ ["背景物","右侧红金色织物为座椅椅披，不属于服装","—"]];
+const SPEC=[
+ ["F1","款式","命妇礼服：大衫 + 霞帔 + 内袍","L2","画像所见；会典“大衫霞帔”（待核）"],
+ ["F2","大衫颜色与纹样","真红，素面无纹","L2","画像所见"],
+ ["F3","大衫襟式与袖型","对襟，前襟细金边；宽大垂袖，袖长过膝","L2","画像所见"],
+ ["F4","霞帔位置与形态","前胸正中垂一条宽带至足前，末端收尖","L2","画像所见"],
+ ["F5","霞帔纹样","金地，五彩云纹 + 龙形（蟒）纹，下段海水江崖","L3","画像所见；与会典“云霞翟纹”的关系待专家判定"],
+ ["F6","坠子","金色水滴形，悬于霞帔末端","L2","画像所见"],
+ ["F7","内袍","金地五彩织纹，可见青绿色蟒（龙）纹","L2","画像所见；种类待考"],
+ ["F8","领口","白色护领","L2","画像所见"],
+ ["F9","腰间白带","白色长带一条，自前腰垂下","L3","画像所见，名称待考"],
+ ["F10","背面形制","大衫背部推定为素红；霞帔后段不可见","L4","画像仅见正面"],
+ ["F11","衣长、通袖长","缺失","miss","画像无尺寸"],
+ ["F12","禁用元素","清代马蹄袖、盘扣、清式大襟立领、背心式霞帔（清制）、云肩、旗装、唐制齐胸襦裙、现代拉链纽扣；大衫不得有刺绣；红色不得偏橙或偏粉","rule","生成约束与自动校验"]];
+const LV={L1:"L1 实测",L2:"L2 史料有载",L3:"L3 同类推定",L4:"L4 推测",miss:"缺失",rule:"规则"};
+const CRIT=[["C1","大衫为真红，不偏橙或粉","F2"],["C2","大衫素面无纹","F2"],["C3","对襟，前襟细金边","F3"],["C4","宽大垂袖，袖长过膝","F3"],
+ ["C5","霞帔居中下垂、金地五彩","F4 F5"],["C6","霞帔有蟒（龙）纹与云纹","F5"],["C7","霞帔下段海水江崖、末端收尖","F5"],["C8","金色水滴形坠子","F6"],
+ ["C9","内袍金地五彩可见","F7"],["C10","白色护领、腰前白带","F8 F9"]];
+const MODELS={
+ nb2:{name:"Nano Banana",vendor:"Google Gemini",lang:"zh",url:"https://gemini.google.com/app",site:"gemini.google.com",tip:"在 Gemini 中直接粘贴；E2 需先上传参考图"},
+ sd:{name:"Seedream",vendor:"字节 · 即梦",lang:"zh",url:"https://jimeng.jianying.com/ai-tool/image/generate",site:"jimeng.jianying.com",tip:"即梦图片生成，选 Seedream 模型，比例 3:4"},
+ gpt:{name:"GPT Image",vendor:"OpenAI · ChatGPT",lang:"en",url:"https://chatgpt.com/",site:"chatgpt.com",tip:"ChatGPT 中用英文提示词，比例 3:4"},
+ qwen:{name:"Qwen-Image（私有化）",vendor:"阿里通义 · 本地 ComfyUI",lang:"zh",url:"http://127.0.0.1:8188",site:"127.0.0.1:8188",tip:"开源模型本地运行，数据不出本机；用 comfy_qwen_restore.py 批量生成"}};
+const GROUPS={
+ E0:{t:"E0 通用直出",d:"不给规格书、不给参考图，作为对照基线",views:["front"]},
+ E1:{t:"E1 规格书 · 文生图",d:"只靠结构化规格书生成三视角",views:["front","side","back"]},
+ E2:{t:"E2 规格书 + 参考图",d:"上传国博画像作参考；侧、背面用正面结果作参考",views:["front","side","back"]},
+ E3:{t:"E3 修订 V2",d:"按专家评审意见修订后重新生成",views:["front","side","back"]},
+ E4:{t:"E4 AI合拍",d:"虚构人物穿着复原服装，展厅全身照",views:["front"]}};
+const VIEWN={front:"正面",side:"侧面",back:"背面"};
+const SPEC_ZH=`【复原对象】明代万历年间临淮侯夫人史氏所着命妇礼服，依据中国国家博物馆藏《李言恭配临淮侯夫人史氏像》。
+【呈现方式】服装穿在无头的白色人台上，浅灰色纯色背景，博物馆文物复原图风格，写实丝绸织物质感，均匀柔光，全身完整入画。画面中不要人物、不要文字、不要水印、不要椅子或地毯。
+【服装结构，由外到内】
+1. 外层大衫：真红色素面丝绸，无任何纹样；对襟，前襟边缘有细金边；袖子极其宽大，垂至膝下；衣长及地。
+2. 霞帔：前胸正中垂下一条宽带，从领下一直垂到接近地面，末端收成尖角；宽带为金色地，满饰五彩云纹和龙形蟒纹，下段为海水江崖纹；尖角末端悬挂一枚金色水滴形坠子。
+3. 内袍：金色地五彩织纹袍，在大衫的领口、胸前和两侧下摆露出，可见青绿色蟒纹。
+4. 领口有白色护领。
+5. 腰前垂下一条白色长带。
+【禁止出现】清代马蹄袖、盘扣、清式大襟立领、背心式霞帔、云肩、旗装、唐代齐胸襦裙、日式和服元素、拉链和现代纽扣；大衫上不能有刺绣图案；红色不能偏橙或偏粉。`;
+const SPEC_EN=`[Subject] Historical reconstruction of a Ming dynasty (Wanli era) noblewoman's ceremonial court dress, based on the portrait of Lady Shi, wife of the Marquis of Linhuai, in the National Museum of China.
+[Presentation] The garments are displayed on a headless white dress form, plain light-grey background, museum reconstruction plate style, realistic silk texture, soft even lighting, full length in frame. No person, no text, no watermark, no chair or carpet.
+[Garment structure, outer to inner]
+1. Outer robe (dashan): plain true-red silk with no pattern at all; centre-front opening edged with a thin gold trim; extremely wide hanging sleeves reaching below the knees; floor length.
+2. Xiapei stole: a single wide band hanging down the centre front from below the collar almost to the floor, ending in a point; gold ground densely decorated with multicoloured clouds and dragon-like python (mang) motifs, with sea-wave-and-cliff pattern on the lower part; a gold teardrop-shaped pendant hangs from the pointed end.
+3. Inner robe: gold-ground robe woven with multicoloured patterns and blue-green python motifs, visible at the collar, chest and both lower sides.
+4. White inner collar band.
+5. A long white sash hanging from the front waist.
+[Must not appear] Qing-dynasty horse-hoof cuffs, frog buttons, Qing-style side-fastening standing collar, vest-shaped xiapei, cloud collar, Manchu robes, Tang high-waisted skirts, Japanese kimono elements, zips or modern buttons; no embroidery on the red outer robe; the red must not drift to orange or pink.`;
+const VIEW_ZH={front:"【视角】正面，人台正对镜头。",side:"【视角】右侧90度侧面，表现宽大垂袖的垂坠和霞帔的厚度。",back:"【视角】背面。大衫背部为素红无纹。霞帔在背后的形制画像中不可见，属于推测：表现为两条较窄的金地带子从后颈垂至背部中段。"};
+const VIEW_EN={front:"[View] Front view, dress form facing the camera.",side:"[View] Right side view at 90 degrees, showing the drape of the wide sleeves.",back:"[View] Back view. The back of the red robe is plain. The back of the xiapei is not visible in the portrait and is conjectural: render it as two narrower gold bands hanging from the back of the neck to mid-back."};
+
+/* ============ 状态 ============ */
+const S={step:"source",group:"E1",model:"nb2",view:"front",runs:[],spec:{version:"V1",changes:[],confirmed:false},final:null,sel:null,local:{},busy:false};
+let db=null, assets=null, sample=null, sampleImgs=false, portraitBlob=null;
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+function toast(t){const el=$("#toast");el.textContent=t;el.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>el.hidden=true,2600)}
+
+/* ============ 提示词组装 ============ */
+function specChangesText(lang){
+  if(!S.spec.changes.length) return "";
+  const lines=S.spec.changes.map((c,i)=>`${i+1}. ${c.field?c.field+" ":""}${c.change}`).join("\n");
+  return lang==="en" ? `\n[Revisions from expert review — apply these]\n${lines}` : `\n【专家评审修订，必须执行】\n${lines}`;
+}
+function buildPrompt(group,model,view){
+  const en=MODELS[model].lang==="en";
+  const spec=en?SPEC_EN:SPEC_ZH, vw=(en?VIEW_EN:VIEW_ZH)[view];
+  if(group==="E0") return en?"Ming dynasty noblewoman's ceremonial dress reconstruction, full length, front view":"明代命妇礼服复原图，全身，正面";
+  if(group==="E1") return `${spec}\n${vw}`;
+  if(group==="E2"){
+    if(view==="front") return (en?"The reference image is the portrait of Lady Shi, wife of the Marquis of Linhuai (Ming dynasty), National Museum of China. Strictly following the garments worn in the portrait, reconstruct them as a real garment photographed on a headless white dress form. Keep the colours, pattern layout and layering of the garments in the portrait; do not copy the person, face, headdress, chair, carpet or background.\n":"参考图是中国国家博物馆藏《李言恭配临淮侯夫人史氏像》。请严格依据画像中人物所穿的服装，把它复原成穿在无头白色人台上的实物服装照片。保留画像中服装的颜色、纹样布局和各层的相对位置；不要复制画像中的人物、面部、冠饰、椅子、地毯和背景。\n")+`${spec}\n${vw}`;
+    return (en?`The reference image is the front view of the same reconstructed garment. Keep exactly the same garment, colours and patterns and generate its ${view==="side"?"right side view at 90 degrees":"back view"}.\n`:`参考图是同一件复原服装的正面图。请保持完全相同的服装、颜色和纹样，生成它的${VIEWN[view]}。\n`)+`${spec}\n${vw}`;
+  }
+  if(group==="E3"){
+    const ch=specChangesText(en?"en":"zh")||(en?"\n[Revisions] (accept an expert review first in step 4)":"\n【修订内容】（请先在第④步采纳专家评审意见）");
+    return (en?"The reference image is the previous version of this reconstruction. Make only the changes listed below and keep everything else the same.\n":"参考图是上一版复原结果。请只做下列修改，其他部分保持不变。\n")+`${spec}${ch}\n${vw}`;
+  }
+  return en?"The reference image is a reconstructed Ming dynasty noblewoman's ceremonial dress. Generate a realistic full-length photo of a fictional young Chinese woman (not any real person) wearing exactly this garment, standing in a museum gallery. Colours, patterns and structure must match the reference. No headdress; a simple Ming-style hair bun. No text."
+   :"参考图是一件明代命妇礼服复原件。请生成一位虚构的中国年轻女性（不是任何真实人物）身穿这件服装、站在博物馆展厅中的全身写实照片。服装的颜色、纹样和结构必须与参考图一致。不要冠饰，发型为简单的明式发髻。不要文字。";
+}
+function refsFor(group,view){
+  if(group==="E2") return view==="front"?"上传参考图：国博画像（史氏像_国博官网.jpg），可加局部_02、局部_03":"上传参考图：E2 正面最佳结果";
+  if(group==="E3") return "上传参考图：第⑤步选出的最佳 V1 结果";
+  if(group==="E4") return "上传参考图：E2 或 E3 正面最佳结果（不要上传真人照片）";
+  return "不需要参考图";
+}
+
+/* ============ 评分工具 ============ */
+function effScores(r){const out={};const ai=r.review?.scores||[];for(const c of CRIT){const a=ai.find(x=>x.id===c[0]);out[c[0]]=r.override?.[c[0]]??(a?Number(a.score):null)}return out}
+function total(r){const s=effScores(r);const v=Object.values(s);if(v.some(x=>x==null))return null;return v.reduce((a,b)=>a+b,0)}
+function imgSrc(r){return S.local[r.id]?.url||(r.assetId?"/_blob/"+r.assetId:"")}
+function runLabel(r){return `${r.group} · ${MODELS[r.model]?.name||r.model} · ${VIEWN[r.view]||r.view}`}
+
+/* ============ 渲染：流程条与依据栏 ============ */
+function stepDone(id){
+  if(id==="source")return true;
+  if(id==="spec")return S.spec.confirmed;
+  if(id==="generate")return S.runs.length>0;
+  if(id==="review")return S.runs.some(r=>r.review);
+  if(id==="compare")return S.runs.some(r=>r.selected);
+  if(id==="revise")return S.spec.changes.length>0;
+  if(id==="final")return !!S.final;
+}
+function renderSteps(){
+  $("#steps").innerHTML=STEPS.map(s=>`<a href="#${s.id}" class="${s.id===S.step?"on":""} ${stepDone(s.id)&&s.id!==S.step?"done":""}"><span class="n">${stepDone(s.id)&&s.id!==S.step?"✓":s.n}</span>${s.t}${s.ex?'<span class="ex">专家</span>':""}</a>`).join("");
+}
+function renderRefSpec(){
+  $("#refSpec").innerHTML=`<h3>规格书 ${S.spec.version} ${S.spec.confirmed?'<span class="tag L1">专家已确认</span>':'<span class="tag miss">待确认</span>'}</h3>
+  <dl class="kv">${SPEC.slice(0,10).map(f=>`<dt>${f[1]}</dt><dd>${esc(f[2])}</dd>`).join("")}</dl>
+  ${S.spec.changes.length?`<p class="note" style="margin-top:8px">V2 修订 ${S.spec.changes.length} 条，见第⑥步</p>`:""}`;
+}
+function drawCrops(){
+  const img=$("#portrait");
+  const go=()=>{$("#crops").innerHTML="";for(const [t,x,y,w,h] of CROPS){const c=document.createElement("canvas");c.width=w*2;c.height=h*2;c.title=t;c.setAttribute("aria-label","局部："+t);c.getContext("2d").drawImage(img,x,y,w,h,0,0,w*2,h*2);$("#crops").append(c)}};
+  img.complete?go():img.addEventListener("load",go,{once:true});
+}
+
+/* ============ 步骤视图 ============ */
+const V={};
+V.source=()=>`
+<div class="head"><div><h2>① 史料汇集</h2><p>以国博公开图像为主史料，逐部位记录“画像所见”，把需要专家判断的问题单独列出。</p></div><span class="sp"></span><span class="pill expert">专家节点 ① 确认史料范围</span></div>
+<section class="card"><h2>画像观察记录 <span class="tag L3">AI 初读，待专家确认</span></h2><div class="scroll"><table><thead><tr><th>部位</th><th>画像所见</th><th>待专家判断</th></tr></thead><tbody>
+${OBS.map(o=>`<tr><td><b>${o[0]}</b></td><td>${o[1]}</td><td class="muted">${o[2]}</td></tr>`).join("")}</tbody></table></div></section>
+<section class="card"><h2>文献</h2><div class="scroll"><table><thead><tr><th>文献</th><th>用途</th><th>状态</th></tr></thead><tbody>
+<tr><td>《李言恭配临淮侯夫人史氏像》</td><td>主史料：服装形制、颜色、纹样布局</td><td><span class="tag L1">已入库</span></td></tr>
+<tr><td>《大明会典》冠服 · 命妇冠服</td><td>命妇礼服“大衫霞帔”制度规定</td><td><span class="tag miss">待录入原文</span></td></tr>
+<tr><td>《明史 · 舆服志》命妇冠服</td><td>交叉核对</td><td><span class="tag miss">待录入原文</span></td></tr>
+<tr><td>国博展览说明（岐阳世泽展、服饰展）</td><td>人物身份与年代</td><td><span class="tag miss">待录入</span></td></tr></tbody></table></div>
+<p class="alert info" style="margin-top:10px">制度文献与画像可能不一致，例如霞帔纹样：画像所见为龙形（蟒）纹，文献常记“云霞翟纹”。系统不替专家判断，标为 L3 交给专家。</p></section>
+<div><a class="btn pri" href="#spec">下一步：形制规格书 →</a></div>`;
+
+V.spec=()=>`
+<div class="head"><div><h2>② 形制规格书 ${S.spec.version}</h2><p>把考据结论变成字段，每个字段标证据等级与依据。规格书是生成的唯一输入。</p></div><span class="sp"></span>
+<span class="pill expert">专家节点 ② 证据分级 · 禁用元素</span>
+${S.spec.confirmed?'<span class="tag L1">专家已确认</span>':`<button class="btn ok" data-act="confirmSpec">专家确认规格书</button>`}</div>
+<section class="card"><div class="scroll"><table><thead><tr><th>编号</th><th>字段</th><th>内容</th><th>证据等级</th><th>依据</th></tr></thead><tbody>
+${SPEC.map(f=>`<tr><td class="mono">${f[0]}</td><td><b>${f[1]}</b></td><td>${esc(f[2])}</td><td><span class="tag ${f[3]}">${LV[f[3]]}</span></td><td class="muted">${f[4]}</td></tr>`).join("")}</tbody></table></div></section>
+${S.spec.changes.length?`<section class="card"><h2>V2 修订（来自专家评审）</h2><ol class="diff">${S.spec.changes.map(c=>`<li><b>${esc(c.field||"")}</b> ${esc(c.change)} <span class="note">— ${esc(c.reason||"")}</span></li>`).join("")}</ol></section>`:""}
+<div><a class="btn pri" href="#generate">下一步：多模型生成 →</a></div>`;
+
+V.generate=()=>{
+  const g=GROUPS[S.group]; if(!g.views.includes(S.view))S.view=g.views[0];
+  const m=MODELS[S.model]; const p=buildPrompt(S.group,S.model,S.view);
+  const runs=S.runs.filter(r=>r.group===S.group);
+  return `
+<div class="head"><div><h2>③ 多模型生成</h2><p>选实验组、模型和视角，复制提示词到模型官网生图；生成后把图片拖到下方上传。文件名按 <span class="mono">E1_nb2_front_1.png</span> 命名可自动识别。</p></div></div>
+<section class="card" style="display:grid;gap:14px">
+ <div class="seg" role="group" aria-label="实验组">${Object.entries(GROUPS).map(([k,v])=>`<button data-group="${k}" class="${k===S.group?"on":""}">${v.t}</button>`).join("")}</div>
+ <p class="note">${g.d}</p>
+ <div class="models">${Object.entries(MODELS).map(([k,v])=>`<div class="model ${k===S.model?"on":""}" data-model="${k}" role="button" tabindex="0" aria-pressed="${k===S.model}"><b>${v.name}</b><span class="note">${v.vendor} · 提示词${v.lang==="en"?"英文":"中文"}</span><span class="note">${v.tip}</span></div>`).join("")}</div>
+ <div class="seg" role="group" aria-label="视角">${g.views.map(v=>`<button data-view="${v}" class="${v===S.view?"on":""}">${VIEWN[v]}</button>`).join("")}</div>
+ <div style="display:grid;gap:8px">
+  <div class="formrow"><b>提示词 · ${g.t} · ${m.name} · ${VIEWN[S.view]}</b><span class="sp"></span>
+   <button class="btn sm" data-act="copy">复制提示词</button>
+   <a class="btn sm pri" href="${m.url}" target="_blank" rel="noopener" data-act="openModel">复制并打开 ${m.name} ↗</a></div>
+  <pre class="prompt" id="promptText">${esc(p)}</pre>
+  <p class="note">参考图：${refsFor(S.group,S.view)}。画幅 3:4，分辨率 2K，每组生成 2 张挑 1 张。官网地址：<span class="mono">${m.site}</span></p>
+ </div>
+</section>
+<section class="card" style="display:grid;gap:12px">
+ <h2>上传生成结果</h2>
+ <div class="formrow">
+  <label class="f">实验组<select id="upGroup">${Object.keys(GROUPS).map(k=>`<option ${k===S.group?"selected":""}>${k}</option>`).join("")}</select></label>
+  <label class="f">模型<select id="upModel">${Object.entries(MODELS).map(([k,v])=>`<option value="${k}" ${k===S.model?"selected":""}>${v.name}</option>`).join("")}</select></label>
+  <label class="f">视角<select id="upView">${["front","side","back"].map(v=>`<option value="${v}" ${v===S.view?"selected":""}>${VIEWN[v]}</option>`).join("")}</select></label>
+  <label class="f">模型版本<input id="upVariant" placeholder="如 Nano Banana Pro / Seedream 5.5" size="22"></label>
+  <label class="f">用时（秒）<input id="upSec" inputmode="numeric" size="6"></label>
+ </div>
+ <div class="drop" id="drop"><b>把图片拖到这里，或</b><label class="btn pri" for="file">选择图片</label><input id="file" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden><span class="note">文件名符合命名规则时，组别、模型、视角以文件名为准</span></div>
+</section>
+<section class="card"><h2>${g.t} 的结果（${runs.length}）<span class="sp"></span><span class="note">点击图片进入专家评审</span></h2>
+ ${runs.length?`<div class="gallery">${runs.map(shotCard).join("")}</div>`:`<div class="empty">还没有 ${g.t} 的结果。复制上面的提示词去模型官网生图，再上传回来。</div>`}
+</section>`;
+};
+function shotCard(r){const t=total(r);return `<div class="shot ${S.sel===r.id?"sel":""}" data-run="${r.id}" role="button" tabindex="0" aria-label="${esc(runLabel(r))}">
+ <div class="im">${imgSrc(r)?`<img src="${imgSrc(r)}" alt="${esc(runLabel(r))}" loading="lazy">`:'<span class="note">图片未保存</span>'}</div>
+ <div class="meta"><b>${esc(runLabel(r))}</b><div class="row">${t==null?'<span class="tag miss">未评审</span>':`<span class="score">${t}/20</span>`}${r.review?verdictTag(r.review.verdict,true):""}${r.selected?'<span class="tag L1">已选</span>':""}</div>${r.variant?`<span class="note">${esc(r.variant)}</span>`:""}</div></div>`}
+function verdictTag(v,small){const c=v==="通过"?"v-pass":v==="退回改规格书"?"v-spec":"v-regen";return small?`<span class="tag ${c}">${esc(v)}</span>`:`<span class="verdict ${c}">${esc(v)}</span>`}
+
+V.review=()=>{
+  const r=S.runs.find(x=>x.id===S.sel)||S.runs.find(x=>!x.review)||S.runs[0];
+  if(r)S.sel=r.id;
+  if(!r) return `<div class="head"><h2>④ 专家评审</h2></div><div class="empty">还没有生成结果。请先到第③步上传图片。<br><a class="btn pri" style="margin-top:10px" href="#generate">去上传</a></div>`;
+  const rv=r.review, sc=effScores(r), t=total(r);
+  return `
+<div class="head"><div><h2>④ 专家评审</h2><p>AI 专家同时看国博画像与候选图，按 C1–C10 逐项打分、在图上标注问题并给出修订意见；专家可点分数改判。</p></div><span class="sp"></span><span class="pill expert">专家节点 ③ 批注退回 · ④ 定稿判断</span></div>
+<section class="card"><div class="formrow"><label class="f" style="min-width:260px">候选图<select id="pickRun">${S.runs.map(x=>`<option value="${x.id}" ${x.id===r.id?"selected":""}>${esc(runLabel(x))}${x.review?" · 已评 "+(total(x)??"")+"/20":""}</option>`).join("")}</select></label>
+<span class="sp"></span><button class="btn pri" data-act="review" ${S.busy?"disabled":""}>${rv?"重新评审":"请 AI 专家评审"}</button>${S.busy?'<button class="btn" data-act="stop">停止</button>':""}</div>
+${!sample?`<p class="alert" style="margin-top:10px">当前部署未接入 AI 专家自动评审，请在右侧逐项手动打分。</p>`:""}
+<div id="streamBox" ${S.busy?"":"hidden"} style="margin-top:10px"><p class="note" id="streamHead">专家正在审阅画像与候选图…（通常 20–60 秒）</p><div class="stream" id="stream"></div></div></section>
+<div class="two">
+ <section class="card"><h2>${esc(runLabel(r))}${rv?" "+verdictTag(rv.verdict):""}</h2>
+  <div class="stage">${imgSrc(r)?`<img src="${imgSrc(r)}" alt="${esc(runLabel(r))}">`:""}${(rv?.annotations||[]).map((a,i)=>`<div class="mark ${a.severity==="ok"?"ok":a.severity==="doubt"?"doubt":""}" style="left:${+a.x||50}%;top:${+a.y||50}%" title="${esc(a.label)}"><span>${i+1}</span></div>`).join("")}</div>
+  ${(rv?.annotations||[]).length?`<ol style="margin:10px 0 0;padding-left:20px;font-size:13px">${rv.annotations.map(a=>`<li>${esc(a.label)}</li>`).join("")}</ol>`:""}
+ </section>
+ <section class="card"><h2>评分 <span class="score">${t==null?"—":t+" / 20"}</span><span class="sp"></span>${rv?`<span class="note">完成度 ${rv.completeness??"—"}/2 · 视角${rv.view_ok===false?"不符":"符合"}</span>`:""}</h2>
+  ${CRIT.map(c=>{const a=rv?.scores?.find(x=>x.id===c[0]);const v=sc[c[0]];const ov=r.override?.[c[0]]!=null;return `<div class="crit"><b class="mono">${c[0]}</b><div><div>${c[1]} <span class="note">${c[2]}</span>${ov?' <span class="tag L3">专家改判</span>':""}</div>${a?`<div class="note">${esc(a.reason)}</div>`:""}<div class="bar"><i style="width:${v==null?0:v*50}%"></i></div></div><div class="dots">${[0,1,2].map(n=>`<button data-score="${c[0]}:${n}" class="${v===n?"on":""}" aria-label="${c[0]} 打 ${n} 分">${n}</button>`).join("")}</div></div>`}).join("")}
+  ${rv?`<div style="display:grid;gap:8px;margin-top:10px">
+   ${rv.forbidden?.length?`<p class="alert">禁用元素：${rv.forbidden.map(f=>esc(f.item+(f.where?"（"+f.where+"）":""))).join("；")}</p>`:'<p class="alert info">未发现禁用元素</p>'}
+   <p><b>结论：</b>${esc(rv.summary)}</p><p class="note">评审人：${esc(rv.reviewer||"Claude（模拟专家）")} · ${rv.at?new Date(rv.at).toLocaleString("zh-CN"):""}；点分数可由真人专家改判</p>
+   ${rv.revisions?.length?`<div><b>修订建议</b><ol style="margin:4px 0 0;padding-left:20px">${rv.revisions.map(x=>`<li><b>${esc(x.field||"")}</b> ${esc(x.change)} <span class="note">— ${esc(x.reason||"")}</span></li>`).join("")}</ol></div>`:""}
+   <div class="formrow">${rv.revisions?.length?`<button class="btn" data-act="adopt">采纳修订，生成 V2 规格</button>`:""}<button class="btn ${r.selected?"":"ok"}" data-act="toggleSel">${r.selected?"取消选择":"选为最佳候选"}</button></div>
+  </div>`:""}
+ </section>
+</div>`;
+};
+
+V.compare=()=>{
+  const rows=Object.keys(GROUPS), cols=Object.keys(MODELS);
+  const best=(g,m)=>{const xs=S.runs.filter(r=>r.group===g&&r.model===m&&total(r)!=null);return xs.length?xs.reduce((a,b)=>total(b)>total(a)?b:a):null};
+  const avg=(g,m)=>{const xs=S.runs.filter(r=>r.group===g&&r.model===m&&total(r)!=null).map(total);return xs.length?(xs.reduce((a,b)=>a+b,0)/xs.length):null};
+  const forb=(m)=>S.runs.filter(r=>r.model===m&&r.review?.forbidden?.length).length;
+  let top=null;for(const r of S.runs){if(total(r)!=null&&(!top||total(r)>total(top)))top=r}
+  return `
+<div class="head"><div><h2>⑤ 对比选择</h2><p>按实验组 × 模型汇总平均分（满分 20），绿色为该组最高；点格子查看对应最佳图。</p></div></div>
+<section class="card"><div class="scroll"><table class="matrix"><thead><tr><th>实验组</th>${cols.map(m=>`<th>${MODELS[m].name}</th>`).join("")}</tr></thead><tbody>
+${rows.map(g=>{const vals=cols.map(m=>avg(g,m));const mx=Math.max(...vals.filter(v=>v!=null));return `<tr><td><b>${GROUPS[g].t}</b></td>${cols.map((m,i)=>{const v=vals[i];const b=best(g,m);return `<td class="${v!=null&&v===mx?"best":""}">${v==null?'<span class="note">—</span>':`<div class="cell" ${b?`data-run="${b.id}" role="button" tabindex="0"`:""}><span class="score">${v.toFixed(1)}</span><span class="cbar"><i style="width:${v/20*100}%"></i></span></div>`}</td>`}).join("")}</tr>`}).join("")}
+<tr><td class="muted">出现禁用元素的图（张）</td>${cols.map(m=>`<td class="mono">${forb(m)}</td>`).join("")}</tr></tbody></table></div></section>
+<section class="card"><h2>已选最佳候选</h2>${S.runs.filter(r=>r.selected).length?`<div class="gallery">${S.runs.filter(r=>r.selected).map(shotCard).join("")}</div>`:`<div class="empty">${top?`目前得分最高：${esc(runLabel(top))}（${total(top)}/20）。在第④步点“选为最佳候选”。`:"评审完成后在这里选出最佳候选。"}</div>`}</section>`;
+};
+
+V.revise=()=>{
+  const v1=S.runs.filter(r=>r.selected&&r.group!=="E3").sort((a,b)=>(total(b)??0)-(total(a)??0))[0];
+  const v2=S.runs.filter(r=>r.group==="E3"&&total(r)!=null).sort((a,b)=>total(b)-total(a))[0];
+  return `
+<div class="head"><div><h2>⑥ 修订 V2</h2><p>专家意见写回规格书，形成 V2；用 V1 最佳图作参考重新生成（E3 组），再评审比较。</p></div></div>
+<section class="card"><h2>规格书 V1 → V2</h2>${S.spec.changes.length?`<ol class="diff">${S.spec.changes.map((c,i)=>`<li><b>${esc(c.field||"")}</b> ${esc(c.change)} <span class="note">— ${esc(c.reason||"")}</span> <button class="btn sm" data-del="${i}">删除</button></li>`).join("")}</ol>
+<div class="formrow" style="margin-top:8px"><a class="btn pri" href="#generate" data-act="goE3">用 V2 生成 E3 →</a></div>`:`<div class="empty">还没有修订。请在第④步对评审结果点“采纳修订，生成 V2 规格”。</div>`}
+<div class="formrow" style="margin-top:12px"><label class="f" style="flex:1;min-width:240px">手动补充一条修订<input id="manualRev" placeholder="例如：F5 霞帔云纹加密，蟒纹位于胸前与膝前两处"></label><button class="btn" data-act="addRev">添加</button></div></section>
+<section class="card"><h2>V1 与 V2 对比</h2>${v1||v2?`<div class="vs">
+ <figure>${v1&&imgSrc(v1)?`<img src="${imgSrc(v1)}" alt="V1">`:'<div class="empty">V1 最佳候选待选</div>'}<figcaption><b>V1</b> ${v1?esc(runLabel(v1))+" · "+(total(v1)??"—")+"/20":""}</figcaption></figure>
+ <figure>${v2&&imgSrc(v2)?`<img src="${imgSrc(v2)}" alt="V2">`:'<div class="empty">E3 结果待上传并评审</div>'}<figcaption><b>V2</b> ${v2?esc(runLabel(v2))+" · "+total(v2)+"/20":""}</figcaption></figure></div>
+ ${v1&&v2?`<p style="margin-top:10px"><b>变化：</b>${total(v2)-total(v1)>=0?"+":""}${total(v2)-(total(v1)??0)} 分</p>`:""}`:`<div class="empty">选出 V1 最佳候选并完成 E3 评审后在此对比。</div>`}</section>`;
+};
+
+V.final=()=>{
+  const cands=S.runs.filter(r=>r.selected||r.group==="E3").filter(r=>total(r)!=null);
+  const f=S.final, fr=f&&S.runs.find(r=>r.id===f.runId);
+  return `
+<div class="head"><div><h2>⑦ 定稿存证</h2><p>专家签署定稿：对图像、规格书版本和评审记录计算哈希并留存，生成数字资产卡。</p></div><span class="sp"></span><span class="pill expert">专家节点 ④ 签名定稿 · ⑤ 授权等级</span></div>
+${f&&fr?`<section class="card"><div class="two" style="align-items:start">
+ <div class="stage">${imgSrc(fr)?`<img src="${imgSrc(fr)}" alt="定稿图">`:""}</div>
+ <div style="display:grid;gap:10px"><h2 style="font-family:var(--f-display);font-size:20px">明 · 临淮侯夫人命妇礼服复原</h2>
+  <dl class="kv"><dt>资产ID</dt><dd class="mono">${esc(f.assetNo)}</dd><dt>依据文物</dt><dd>《李言恭配临淮侯夫人史氏像》· 国博藏</dd><dt>定稿版本</dt><dd>规格书 ${esc(f.specVersion)} · ${esc(runLabel(fr))}</dd><dt>评审得分</dt><dd>${esc(f.score)}/20</dd><dt>签署</dt><dd>${esc(f.signer)} · ${new Date(f.signedAt).toLocaleString("zh-CN")}</dd><dt>授权等级</dt><dd>${esc(f.license)}</dd></dl>
+  <div><b>存证哈希</b> <span class="note">SHA-256（演示；正式环境为国密 SM3，国博与咪咕双节点见证）</span><div class="hash">${esc(f.hash)}</div></div>
+  <div class="formrow"><button class="btn sm" data-act="verify">校验哈希</button><button class="btn sm warn" data-act="unfinal">撤销定稿</button></div><p class="note" id="verifyOut"></p></div></div></section>`
+:`<section class="card" style="display:grid;gap:12px">${cands.length?`
+ <div class="formrow"><label class="f" style="min-width:260px">定稿候选<select id="finRun">${cands.map(r=>`<option value="${r.id}">${esc(runLabel(r))} · ${total(r)}/20</option>`).join("")}</select></label>
+ <label class="f">签署专家<input id="finSigner" value="服饰史专家（演示）" size="18"></label>
+ <label class="f">授权等级<select id="finLic"><option>仅内部研究</option><option selected>可对外展示</option><option>可商业授权</option></select></label>
+ <button class="btn ok" data-act="sign">签署定稿</button></div>`:`<div class="empty">需要至少一张已评审并选为最佳候选（或 E3 修订版）的图。</div>`}</section>`}`;
+};
+
+/* ============ 主渲染与事件 ============ */
+function render(){
+  const id=(location.hash||"#source").slice(1);S.step=STEPS.some(s=>s.id===id)?id:"source";
+  renderSteps();renderRefSpec();$("#main").innerHTML=V[S.step]();bindDrop();
+}
+window.addEventListener("hashchange",()=>{render();window.scrollTo(0,0)});
+document.addEventListener("click",async e=>{
+  const t=e.target.closest("[data-group],[data-model],[data-view],[data-act],[data-run],[data-score],[data-del]");if(!t)return;
+  if(t.dataset.group){S.group=t.dataset.group;render()}
+  else if(t.dataset.model){S.model=t.dataset.model;render()}
+  else if(t.dataset.view){S.view=t.dataset.view;render()}
+  else if(t.dataset.run){S.sel=t.dataset.run;location.hash="#review";if(S.step==="review")render()}
+  else if(t.dataset.score){const [c,n]=t.dataset.score.split(":");const r=S.runs.find(x=>x.id===S.sel);if(r){r.override={...(r.override||{}),[c]:+n};await save(r);render()}}
+  else if(t.dataset.del!=null){S.spec.changes.splice(+t.dataset.del,1);await saveSpec();render()}
+  else act(t.dataset.act,t,e);
+});
+document.addEventListener("keydown",e=>{if((e.key==="Enter"||e.key===" ")&&e.target.matches("[role=button]")){e.preventDefault();e.target.click()}});
+document.addEventListener("change",e=>{if(e.target.id==="pickRun"){S.sel=e.target.value;render()}if(e.target.id==="file")handleFiles(e.target.files)});
+
+async function copyPrompt(){const txt=$("#promptText")?.textContent||"";try{await navigator.clipboard.writeText(txt);toast("提示词已复制")}catch{const r=document.createRange();r.selectNodeContents($("#promptText"));const s=getSelection();s.removeAllRanges();s.addRange(r);toast("请按 Ctrl+C 复制已选中的提示词")}}
+async function act(a,t,e){
+  if(a==="copy")copyPrompt();
+  if(a==="openModel")copyPrompt();
+  if(a==="confirmSpec"){S.spec.confirmed=true;S.spec.confirmedAt=Date.now();await saveSpec();toast("规格书已由专家确认");render()}
+  if(a==="review")runReview();
+  if(a==="stop")S.ctl?.abort();
+  if(a==="adopt"){const r=S.runs.find(x=>x.id===S.sel);for(const x of r.review.revisions||[])S.spec.changes.push({field:x.field,change:x.change,reason:x.reason,fromRun:r.id});S.spec.version="V2";await saveSpec();toast("已写入 V2 规格书");render()}
+  if(a==="addRev"){const v=$("#manualRev").value.trim();if(!v)return;const m=v.match(/^(F\d+)\s*/);S.spec.changes.push({field:m?m[1]:"",change:m?v.slice(m[0].length):v,reason:"专家手动补充"});S.spec.version="V2";await saveSpec();render()}
+  if(a==="goE3"){S.group="E3";S.view="front"}
+  if(a==="toggleSel"){const r=S.runs.find(x=>x.id===S.sel);r.selected=!r.selected;await save(r);toast(r.selected?"已选为最佳候选":"已取消");render()}
+  if(a==="sign")sign();
+  if(a==="verify")verify();
+  if(a==="unfinal"){S.final=null;if(db)try{await db.doc("meta/final").delete()}catch{};render()}
+}
+
+/* ============ 上传 ============ */
+function bindDrop(){const d=$("#drop");if(!d)return;
+  ["dragenter","dragover"].forEach(ev=>d.addEventListener(ev,e=>{e.preventDefault();d.classList.add("over")}));
+  ["dragleave","drop"].forEach(ev=>d.addEventListener(ev,e=>{e.preventDefault();d.classList.remove("over")}));
+  d.addEventListener("drop",e=>handleFiles(e.dataTransfer.files));}
+function parseName(n){const m=n.match(/(E[0-4])_(nb2|nbpro|sd|gpt|qwen)_(front|side|back)/i);if(!m)return null;return {group:m[1].toUpperCase(),model:m[2].toLowerCase()==="nbpro"?"nb2":m[2].toLowerCase(),view:m[3].toLowerCase(),variant:m[2].toLowerCase()==="nbpro"?"Nano Banana Pro":""}}
+async function handleFiles(files){
+  for(const f of files){
+    if(!/^image\/(png|jpeg|webp)$/.test(f.type)){toast(`${f.name}：只支持 PNG、JPG、WebP`);continue}
+    const p=parseName(f.name)||{group:$("#upGroup").value,model:$("#upModel").value,view:$("#upView").value,variant:""};
+    const id=`${p.group}_${p.model}_${p.view}_${Date.now().toString(36)}${Math.random().toString(36).slice(2,5)}`;
+    const r={id,group:p.group,model:p.model,view:p.view,variant:p.variant||$("#upVariant").value.trim(),durationSec:+$("#upSec").value||null,fileName:f.name,createdAt:Date.now(),specVersion:S.spec.version,assetId:null,selected:false};
+    S.local[id]={file:f,url:URL.createObjectURL(f)};
+    if(assets){try{const up=await assets.upload(f);r.assetId=up.id}catch(err){toast(`${f.name} 未能保存到云端（${err.code||"error"}），本次会话内可用`)}}
+    S.runs.push(r);await save(r);
+  }
+  toast(`已上传 ${files.length} 张`);S.group=S.runs.at(-1)?.group||S.group;render();
+}
+
+/* ============ AI 专家评审 ============ */
+async function blobOf(r){if(S.local[r.id]?.file)return S.local[r.id].file;if(r.assetId){const res=await fetch("/_blob/"+r.assetId);if(res.ok)return await res.blob()}throw {code:"no_image",message:"找不到这张图的文件"}}
+function reviewPrompt(r){
+  const specTxt=SPEC.map(f=>`${f[0]} ${f[1]}：${f[2]}（${LV[f[3]]}；依据：${f[4]}）`).join("\n");
+  const ch=S.spec.changes.length?"\n规格书 V2 修订：\n"+S.spec.changes.map(c=>`- ${c.field} ${c.change}`).join("\n"):"";
+  return `你是中国古代服饰史专家，熟悉明代命妇冠服制度，正在为中国国家博物馆审核一张 AI 复原候选图。
+图1：国博藏《李言恭配临淮侯夫人史氏像》（明），这是复原依据。图2：候选复原图（实验组 ${r.group}，${GROUPS[r.group].t}；模型 ${MODELS[r.model].name}；应为${VIEWN[r.view]}视角${r.group==="E4"?"；这是虚构人物穿着复原服装的合拍图":"；服装应穿在无头白色人台上"}）。
+
+形制规格书：
+${specTxt}${ch}
+
+请逐项评分（0=不符合，1=部分符合，2=符合）。只依据图2中能看到的内容评分；该视角下看不到的部位（如背面看不到前胸垂带），按“是否与规格书矛盾”评分，不矛盾给1分并在理由中说明“该视角不可见”。
+${CRIT.map(c=>`${c[0]} ${c[1]}（对应 ${c[2]}）`).join("\n")}
+
+另外检查禁用元素（F12）是否出现，给出图2上问题位置的标注（x、y 为相对图2宽高的百分比，0–100），并给出结论：
+- “通过”：总分≥16 且无禁用元素；
+- “退回改规格书”：问题源于规格书描述不清或与画像不一致；
+- “重新生成”：规格书清楚但模型没做到。
+修订建议写成可直接写入规格书的句子，每条注明字段编号。
+
+只回复一个 JSON 对象，格式如下，不要其他文字：
+{"scores":[{"id":"C1","score":2,"reason":"简短理由"}],"forbidden":[{"item":"盘扣","where":"前襟"}],"view_ok":true,"completeness":2,"annotations":[{"x":52,"y":40,"label":"问题说明","severity":"error"}],"verdict":"重新生成","summary":"两三句总体评价","revisions":[{"field":"F5","change":"修订后的描述","reason":"原因"}]}
+severity 取 error（错误）、doubt（存疑）或 ok（亮点）。scores 必须包含 C1 到 C10 全部十项。`;
+}
+async function runReview(){
+  const r=S.runs.find(x=>x.id===S.sel);if(!r||!sample)return;
+  S.busy=true;S.ctl=new AbortController();render();
+  try{
+    if(!sampleImgs)throw {code:"images_unavailable"};
+    const imgs=[portraitBlob||await (await fetch("shi.jpg")).blob(),await blobOf(r)];
+    const out=await sample.json(reviewPrompt(r),{images:imgs,signal:S.ctl.signal,cache:false,onText:({text})=>{const el=$("#stream");if(el){el.textContent=text;el.scrollTop=el.scrollHeight;$("#streamHead").textContent="专家正在写评审意见…"}}});
+    if(!out||!Array.isArray(out.scores))throw {code:"invalid_json"};
+    out.at=Date.now();out.reviewer="Claude（模拟专家）";r.review=out;r.override={};await save(r);toast("评审完成");
+  }catch(err){
+    const msg={not_granted:"未授权本页面使用 Claude，可手动打分。",images_unavailable:"当前环境不能发送图片给 AI 专家。",rate_limited:"调用太频繁，请稍后再试。",invalid_json:"评审结果格式不完整，请重新评审。",cancelled:"已停止。",no_image:"找不到这张图的文件，请重新上传。",refused:"AI 专家拒绝评审这张图，请换一张。",session_expired:"登录已过期，请重新登录 claude.ai。"}[err.code]||"评审失败，请重试。";
+    toast(msg);
+  }finally{S.busy=false;render()}
+}
+
+/* ============ 定稿与哈希 ============ */
+function stable(v){if(Array.isArray(v))return "["+v.map(stable).join(",")+"]";if(v&&typeof v==="object")return "{"+Object.keys(v).sort().map(k=>JSON.stringify(k)+":"+stable(v[k])).join(",")+"}";return JSON.stringify(v)}
+async function digest(r,meta){const b=await blobOf(r);const buf=new Uint8Array(await b.arrayBuffer());const extra=new TextEncoder().encode(stable(meta));const all=new Uint8Array(buf.length+extra.length);all.set(buf);all.set(extra,buf.length);const h=await crypto.subtle.digest("SHA-256",all);return [...new Uint8Array(h)].map(x=>x.toString(16).padStart(2,"0")).join("")}
+async function sign(){
+  const r=S.runs.find(x=>x.id===$("#finRun").value);
+  const meta={runId:r.id,specVersion:r.specVersion||S.spec.version,changes:S.spec.changes,scores:effScores(r),signer:$("#finSigner").value.trim()||"服饰史专家",license:$("#finLic").value};
+  try{const hash=await digest(r,meta);S.final={...meta,hash,score:total(r),signedAt:Date.now(),assetNo:"YG-2026-B-"+String(Date.now()).slice(-4)};if(db)await db.doc("meta/final").set(S.final);toast("已签署定稿并存证");render()}catch(err){toast("签署失败："+(err.message||err.code||"未知错误"))}
+}
+async function verify(){const f=S.final,r=S.runs.find(x=>x.id===f.runId);try{const {hash,score,signedAt,assetNo,...meta}=f;const h=await digest(r,meta);$("#verifyOut").textContent=h===f.hash?"✓ 哈希一致：图像与记录未被改动":"✕ 哈希不一致：图像或记录已被改动"}catch{$("#verifyOut").textContent="无法读取图像文件"}}
+
+/* ============ 存储 ============ */
+async function save(r){if(!db)return;try{await db.doc("runs/"+r.id).set(JSON.parse(JSON.stringify(r)))}catch(err){toast("保存失败："+(err.code||""))}}
+async function saveSpec(){if(!db)return;try{await db.doc("meta/spec").set(JSON.parse(JSON.stringify(S.spec)))}catch{}}
+
+/* ============ 启动 ============ */
+render();drawCrops();
+fetch("shi.jpg").then(r=>r.blob()).then(b=>portraitBlob=b).catch(()=>{});
+(async()=>{
+  const w=window.claude; if(!w?.use){$("#envState").textContent="离线模式 · 结果仅保存在本次浏览";return}
+  [db,assets,sample]=await Promise.all(["db","assets","sample"].map(n=>w.use(n).catch(()=>null)));
+  if(sample){try{sampleImgs=!!(await sample.limits()).images}catch{sampleImgs=false}}
+  $("#envState").textContent=[db?"存储已连接":"存储未连接",assets?"图片可云端保存":"图片仅本次可用",sample?(sampleImgs?"AI专家可用":"AI专家不可看图"):"AI专家不可用"].join(" · ");
+  if(db){
+    db.collection("runs").orderBy("createdAt").onSnapshot(s=>{S.runs=s.docs.map(d=>({...d.data(),id:d.id}));render()},()=>{});
+    db.doc("meta/spec").onSnapshot(d=>{if(d.exists){S.spec={...S.spec,...d.data(),changes:[...(d.data().changes||[])]};render()}},()=>{});
+    db.doc("meta/final").onSnapshot(d=>{S.final=d.exists?{...d.data()}:null;render()},()=>{});
+  }
+})();
+</script>
+
+</body></html>

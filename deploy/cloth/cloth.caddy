@@ -1,0 +1,22 @@
+# 衣冠复原实验台。由现有 Caddyfile import 本文件，不改动其他站点。
+# 部署前把 CLOTH_USER 和 CLOTH_PASSWORD_HASH 换成实际账号和 `caddy hash-password` 生成的哈希。
+cloth.migucomi.com {
+    encode zstd gzip
+    header {
+        X-Content-Type-Options nosniff
+        Referrer-Policy same-origin
+        -Server
+    }
+    request_body {
+        max_size 30MB
+    }
+    basicauth {
+        CLOTH_USER CLOTH_PASSWORD_HASH
+    }
+    reverse_proxy 127.0.0.1:8790 {
+        header_up X-Forwarded-Proto {scheme}
+    }
+    handle_errors {
+        respond "衣冠复原实验台服务暂时不可用，请联系管理员。" 503
+    }
+}

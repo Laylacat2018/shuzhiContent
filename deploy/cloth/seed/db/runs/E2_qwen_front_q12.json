@@ -1,0 +1,79 @@
+{
+ "assetId": "6c725b4dd642d61535deccf1d943d199",
+ "createdAt": 1795450633999,
+ "durationSec": 106,
+ "fileName": "outputs_v4/E2_qwen_front_4.png",
+ "group": "E2",
+ "id": "E2_qwen_front_q12",
+ "model": "qwen",
+ "override": {},
+ "promptVersion": "v4",
+ "review": {
+  "annotations": [],
+  "at": 1795450633999,
+  "completeness": 2,
+  "forbidden": [],
+  "reviewer": "Claude（模拟专家，按 C1–C10 人工判读）",
+  "revisions": [],
+  "scores": [
+   {
+    "id": "C1",
+    "reason": "偏橙",
+    "score": 1
+   },
+   {
+    "id": "C2",
+    "reason": "素面",
+    "score": 2
+   },
+   {
+    "id": "C3",
+    "reason": "对襟金边",
+    "score": 2
+   },
+   {
+    "id": "C4",
+    "reason": "两袖裹在身前",
+    "score": 0
+   },
+   {
+    "id": "C5",
+    "reason": "胸前金地宽片，中段被袖子挡住",
+    "score": 1
+   },
+   {
+    "id": "C6",
+    "reason": "翟纹与云纹在胸前片上",
+    "score": 1
+   },
+   {
+    "id": "C7",
+    "reason": "无海水江崖",
+    "score": 0
+   },
+   {
+    "id": "C8",
+    "reason": "末端是金色流苏，不是水滴坠子",
+    "score": 0
+   },
+   {
+    "id": "C9",
+    "reason": "领口下有蓝色蟒首",
+    "score": 2
+   },
+   {
+    "id": "C10",
+    "reason": "无白色交领与白带",
+    "score": 0
+   }
+  ],
+  "summary": "内袍蟒纹可见，但袖子裹身，霞帔不完整，坠子变成流苏。",
+  "verdict": "重新生成",
+  "view_ok": true
+ },
+ "seed": 491270209,
+ "selected": false,
+ "specVersion": "V1",
+ "variant": "Qwen-Image-Edit-2509 fp8 · 本地ComfyUI · v4 结构约束 + 裁剪 + 照片化 · seed 491270209 · 30步 CFG4",
+ "view": "front"
+}

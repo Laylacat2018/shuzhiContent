@@ -1,0 +1,84 @@
+{
+ "assetId": "801eb2417da7750110aa5ed6ce7f8799",
+ "createdAt": 1795450634000,
+ "durationSec": 108,
+ "fileName": "outputs_v4/E2_qwen_front_5.png",
+ "group": "E2",
+ "id": "E2_qwen_front_q13",
+ "model": "qwen",
+ "override": {},
+ "promptVersion": "v4",
+ "review": {
+  "annotations": [],
+  "at": 1795450634000,
+  "completeness": 2,
+  "forbidden": [
+   {
+    "item": "背心式霞帔（疑似）",
+    "where": "上段覆盖双肩的金地宽片"
+   }
+  ],
+  "reviewer": "Claude（模拟专家，按 C1–C10 人工判读）",
+  "revisions": [],
+  "scores": [
+   {
+    "id": "C1",
+    "reason": "深正红",
+    "score": 2
+   },
+   {
+    "id": "C2",
+    "reason": "素面",
+    "score": 2
+   },
+   {
+    "id": "C3",
+    "reason": "斜侧，对襟不清",
+    "score": 1
+   },
+   {
+    "id": "C4",
+    "reason": "下垂到大腿，袖口露出彩纹内袖",
+    "score": 1
+   },
+   {
+    "id": "C5",
+    "reason": "下段居中下垂；上段变成盖住两肩的宽片",
+    "score": 1
+   },
+   {
+    "id": "C6",
+    "reason": "有成对禽鸟纹，无蟒",
+    "score": 1
+   },
+   {
+    "id": "C7",
+    "reason": "末端浪花，收尖",
+    "score": 2
+   },
+   {
+    "id": "C8",
+    "reason": "一枚，正中",
+    "score": 2
+   },
+   {
+    "id": "C9",
+    "reason": "领口下蓝绿蟒首",
+    "score": 2
+   },
+   {
+    "id": "C10",
+    "reason": "胸前一条白色横带；无白色交领",
+    "score": 1
+   }
+  ],
+  "summary": "元素最全（坠子、海水、蟒首、内袖都有），但上段像清制背心式霞帔，另多了金色腰带。",
+  "verdict": "重新生成",
+  "view_ok": true
+ },
+ "seed": 511151793,
+ "selected": false,
+ "specVersion": "V1",
+ "variant": "Qwen-Image-Edit-2509 fp8 · 本地ComfyUI · v4 结构约束 + 裁剪 + 照片化 · seed 511151793 · 30步 CFG4",
+ "view": "front"
+}

@@ -1,0 +1,79 @@
+{
+ "assetId": "d8320e090c661e261a560d63d297f681",
+ "createdAt": 1795450633992,
+ "durationSec": 134,
+ "fileName": "outputs_v3/E2_qwen_front_1.png",
+ "group": "E2",
+ "id": "E2_qwen_front_q05",
+ "model": "qwen",
+ "override": {},
+ "promptVersion": "v3",
+ "review": {
+  "annotations": [],
+  "at": 1795450633992,
+  "completeness": 2,
+  "forbidden": [],
+  "reviewer": "Claude（模拟专家，按 C1–C10 人工判读）",
+  "revisions": [],
+  "scores": [
+   {
+    "id": "C1",
+    "reason": "真红",
+    "score": 2
+   },
+   {
+    "id": "C2",
+    "reason": "素面",
+    "score": 2
+   },
+   {
+    "id": "C3",
+    "reason": "前襟敞开，金色细边",
+    "score": 2
+   },
+   {
+    "id": "C4",
+    "reason": "很宽，但照搬画像坐姿时堆在两侧",
+    "score": 1
+   },
+   {
+    "id": "C5",
+    "reason": "金地五彩居中贯穿到底，但为一条宽带",
+    "score": 2
+   },
+   {
+    "id": "C6",
+    "reason": "有对称禽鸟纹和彩色云带，蟒形不明确",
+    "score": 1
+   },
+   {
+    "id": "C7",
+    "reason": "下端浪花，末端收尖",
+    "score": 2
+   },
+   {
+    "id": "C8",
+    "reason": "一枚，正中，形状偏菱形",
+    "score": 2
+   },
+   {
+    "id": "C9",
+    "reason": "领口下露出青绿蟒首，下摆两侧露出金地彩纹内袍",
+    "score": 2
+   },
+   {
+    "id": "C10",
+    "reason": "无白色交领；白带斜过胸前（照搬画像）",
+    "score": 1
+   }
+  ],
+  "summary": "本次 Qwen 测试中最接近规格书的一张：大衫、霞帔、坠子与内袍三层都有。不足是袖子保留了坐姿形态，霞帔画成一条，无白色交领。",
+  "verdict": "通过",
+  "view_ok": true
+ },
+ "seed": 1234440434,
+ "selected": false,
+ "specVersion": "V1",
+ "variant": "Qwen-Image-Edit-2509 fp8 · 本地ComfyUI · v3 结构约束 + 画像裁剪 · seed 1234440434 · 30步 CFG4",
+ "view": "front"
+}

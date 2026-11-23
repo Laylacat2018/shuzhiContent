@@ -1,0 +1,79 @@
+{
+ "assetId": "8bfe0effc72308ec9ebef65667da1529",
+ "createdAt": 1795450633989,
+ "durationSec": 118,
+ "fileName": "outputs/E1_qwen_front_2.png",
+ "group": "E1",
+ "id": "E1_qwen_front_q02",
+ "model": "qwen",
+ "override": {},
+ "promptVersion": "r1",
+ "review": {
+  "annotations": [],
+  "at": 1795450633989,
+  "completeness": 2,
+  "forbidden": [],
+  "reviewer": "Claude（模拟专家，按 C1–C10 人工判读）",
+  "revisions": [],
+  "scores": [
+   {
+    "id": "C1",
+    "reason": "偏橙红",
+    "score": 1
+   },
+   {
+    "id": "C2",
+    "reason": "有暗纹光泽",
+    "score": 1
+   },
+   {
+    "id": "C3",
+    "reason": "前襟合拢，像圆领袍，袖口多了宽金边",
+    "score": 0
+   },
+   {
+    "id": "C4",
+    "reason": "宽袖自然下垂至膝",
+    "score": 2
+   },
+   {
+    "id": "C5",
+    "reason": "居中平行下垂，但为绿地，不是金地",
+    "score": 1
+   },
+   {
+    "id": "C6",
+    "reason": "金色禽鸟纹与五彩云纹，无蟒纹",
+    "score": 1
+   },
+   {
+    "id": "C7",
+    "reason": "下段有立水海浪，末端收尖",
+    "score": 2
+   },
+   {
+    "id": "C8",
+    "reason": "尖角下有金色水滴坠子",
+    "score": 2
+   },
+   {
+    "id": "C9",
+    "reason": "胸前露出金地青蟒，但做成方形补子样",
+    "score": 1
+   },
+   {
+    "id": "C10",
+    "reason": "里层白色交领；无腰前白带",
+    "score": 1
+   }
+  ],
+  "summary": "结构居中、海水江崖与坠子都对，但霞帔绿地、对襟缺失，内袍做成补子式方块。",
+  "verdict": "重新生成",
+  "view_ok": true
+ },
+ "seed": 1966950449,
+ "selected": false,
+ "specVersion": "V1",
+ "variant": "Qwen-Image fp8 · 本地ComfyUI · 第1轮提示词（无裁剪） · seed 1966950449 · 30步 CFG4",
+ "view": "front"
+}

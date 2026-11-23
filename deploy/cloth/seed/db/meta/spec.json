@@ -1,0 +1,61 @@
+{
+ "changes": [
+  {
+   "change": "霞帔为两条带子自颈后经两肩绕到胸前，在胸前并合后垂于身前正中；单条宽度不超过肩宽的三分之一，不得做成覆盖双肩的背心",
+   "field": "F4",
+   "fromRun": "E2_gpt_front_m1",
+   "reason": "GPT 把上身做成背心"
+  },
+  {
+   "change": "上身胸前可见的金地蟒纹区域属于内袍（圆领），位于霞帔两带之间",
+   "field": "F7",
+   "fromRun": "E2_gpt_front_m1",
+   "reason": "区分内袍与霞帔"
+  },
+  {
+   "change": "领口为交领白色护领，不得做成立领",
+   "field": "F8",
+   "fromRun": "E2_gpt_front_m1",
+   "reason": "GPT 出现立领"
+  },
+  {
+   "change": "霞帔必须居中垂于身前正中、左右对称，不可斜挂单肩",
+   "field": "F4",
+   "fromRun": "E2_sd_front_m2",
+   "reason": "Seedream 两张均斜挂"
+  },
+  {
+   "change": "大衫红色为鲜亮正红，参照画像色相，不得偏暗红或酒红",
+   "field": "F2",
+   "fromRun": "E2_sd_front_m2",
+   "reason": "Seedream 红色偏暗"
+  },
+  {
+   "change": "内袍参照明代蟒袍：胸前一条大蟒，两袖有通袖襕，膝部有膝襕",
+   "field": "F7",
+   "fromRun": "E2_sd_front_m3",
+   "reason": "Seedream 内袍形制可取，写入规格以便其他模型对齐"
+  },
+  {
+   "change": "霞帔纹样以云霞翟纹（成对翟鸟）为主，龙形蟒纹只出现在胸前内袍上（专家判定：画像霞帔下段纹样与会典“云霞翟纹”相合）",
+   "field": "F5",
+   "fromRun": "E2_nb2_front_m4",
+   "reason": "统一画像与文献"
+  },
+  {
+   "change": "坠子宽度约为霞帔宽度的三分之一",
+   "field": "F6",
+   "fromRun": "E2_nb2_front_m4",
+   "reason": "Nano Banana 坠子过大"
+  },
+  {
+   "change": "人台为无头、无手臂白色人台；白带自腰前自然垂下",
+   "field": "F1",
+   "fromRun": "E2_nb2_front_m4",
+   "reason": "统一呈现方式"
+  }
+ ],
+ "confirmed": true,
+ "confirmedAt": 1795418442136,
+ "version": "V2"
+}

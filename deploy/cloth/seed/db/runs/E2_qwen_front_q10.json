@@ -1,0 +1,79 @@
+{
+ "assetId": "56f6b7963551eeca7f035fd5d097ea27",
+ "createdAt": 1795450633997,
+ "durationSec": 99,
+ "fileName": "outputs_v4/E2_qwen_front_2.png",
+ "group": "E2",
+ "id": "E2_qwen_front_q10",
+ "model": "qwen",
+ "override": {},
+ "promptVersion": "v4",
+ "review": {
+  "annotations": [],
+  "at": 1795450633997,
+  "completeness": 0,
+  "forbidden": [],
+  "reviewer": "Claude（模拟专家，按 C1–C10 人工判读）",
+  "revisions": [],
+  "scores": [
+   {
+    "id": "C1",
+    "reason": "与画像一致",
+    "score": 2
+   },
+   {
+    "id": "C2",
+    "reason": "素面",
+    "score": 2
+   },
+   {
+    "id": "C3",
+    "reason": "对襟金边",
+    "score": 2
+   },
+   {
+    "id": "C4",
+    "reason": "坐姿堆叠",
+    "score": 1
+   },
+   {
+    "id": "C5",
+    "reason": "居中金地五彩",
+    "score": 2
+   },
+   {
+    "id": "C6",
+    "reason": "同画像",
+    "score": 1
+   },
+   {
+    "id": "C7",
+    "reason": "同画像",
+    "score": 2
+   },
+   {
+    "id": "C8",
+    "reason": "同画像",
+    "score": 2
+   },
+   {
+    "id": "C9",
+    "reason": "同画像",
+    "score": 2
+   },
+   {
+    "id": "C10",
+    "reason": "同画像",
+    "score": 1
+   }
+  ],
+  "summary": "加入“不要绘画质感”后仍与 v3 几乎一样，依旧是画像重绘。说明该种子下模型倾向原样返回输入，提示词拉不回来。",
+  "verdict": "重新生成",
+  "view_ok": true
+ },
+ "seed": 2081972815,
+ "selected": false,
+ "specVersion": "V1",
+ "variant": "Qwen-Image-Edit-2509 fp8 · 本地ComfyUI · v4 结构约束 + 裁剪 + 照片化 · seed 2081972815 · 30步 CFG4",
+ "view": "front"
+}

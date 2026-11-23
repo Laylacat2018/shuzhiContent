@@ -1,0 +1,84 @@
+{
+ "assetId": "8b54efe306b2d3beed1ad2cb23d20f6f",
+ "createdAt": 1795450633994,
+ "durationSec": 100,
+ "fileName": "outputs_v3/E2_qwen_front_3.png",
+ "group": "E2",
+ "id": "E2_qwen_front_q07",
+ "model": "qwen",
+ "override": {},
+ "promptVersion": "v3",
+ "review": {
+  "annotations": [],
+  "at": 1795450633994,
+  "completeness": 2,
+  "forbidden": [
+   {
+    "item": "立领（疑似）",
+    "where": "领口"
+   }
+  ],
+  "reviewer": "Claude（模拟专家，按 C1–C10 人工判读）",
+  "revisions": [],
+  "scores": [
+   {
+    "id": "C1",
+    "reason": "真红",
+    "score": 2
+   },
+   {
+    "id": "C2",
+    "reason": "素面",
+    "score": 2
+   },
+   {
+    "id": "C3",
+    "reason": "对襟金边清楚",
+    "score": 2
+   },
+   {
+    "id": "C4",
+    "reason": "下垂，仅到大腿",
+    "score": 1
+   },
+   {
+    "id": "C5",
+    "reason": "没有霞帔",
+    "score": 0
+   },
+   {
+    "id": "C6",
+    "reason": "无霞帔",
+    "score": 0
+   },
+   {
+    "id": "C7",
+    "reason": "无",
+    "score": 0
+   },
+   {
+    "id": "C8",
+    "reason": "无",
+    "score": 0
+   },
+   {
+    "id": "C9",
+    "reason": "中间与下摆露出金色纹样内袍，看不出蟒",
+    "score": 1
+   },
+   {
+    "id": "C10",
+    "reason": "领口像小立领，无白带",
+    "score": 0
+   }
+  ],
+  "summary": "大衫做得干净，但整件霞帔缺失；画面发灰褪色。",
+  "verdict": "重新生成",
+  "view_ok": true
+ },
+ "seed": 722392476,
+ "selected": false,
+ "specVersion": "V1",
+ "variant": "Qwen-Image-Edit-2509 fp8 · 本地ComfyUI · v3 结构约束 + 画像裁剪 · seed 722392476 · 30步 CFG4",
+ "view": "front"
+}

@@ -1,0 +1,79 @@
+{
+ "assetId": "5549934bf6e566800f43e4ca115634df",
+ "createdAt": 1795450633998,
+ "durationSec": 112,
+ "fileName": "outputs_v4/E2_qwen_front_3.png",
+ "group": "E2",
+ "id": "E2_qwen_front_q11",
+ "model": "qwen",
+ "override": {},
+ "promptVersion": "v4",
+ "review": {
+  "annotations": [],
+  "at": 1795450633998,
+  "completeness": 2,
+  "forbidden": [],
+  "reviewer": "Claude（模拟专家，按 C1–C10 人工判读）",
+  "revisions": [],
+  "scores": [
+   {
+    "id": "C1",
+    "reason": "真红",
+    "score": 2
+   },
+   {
+    "id": "C2",
+    "reason": "素面",
+    "score": 2
+   },
+   {
+    "id": "C3",
+    "reason": "对襟金边",
+    "score": 2
+   },
+   {
+    "id": "C4",
+    "reason": "两袖自然下垂到膝部，袖口露出金色内袖",
+    "score": 2
+   },
+   {
+    "id": "C5",
+    "reason": "没有霞帔",
+    "score": 0
+   },
+   {
+    "id": "C6",
+    "reason": "无",
+    "score": 0
+   },
+   {
+    "id": "C7",
+    "reason": "无",
+    "score": 0
+   },
+   {
+    "id": "C8",
+    "reason": "无",
+    "score": 0
+   },
+   {
+    "id": "C9",
+    "reason": "下摆露出金色内袍，胸前一块方形纹样像补子",
+    "score": 1
+   },
+   {
+    "id": "C10",
+    "reason": "圆领，无白色交领与白带",
+    "score": 0
+   }
+  ],
+  "summary": "照片质感和袖子下垂都改善，但与 v3 同种子一样没有霞帔。",
+  "verdict": "重新生成",
+  "view_ok": true
+ },
+ "seed": 722392476,
+ "selected": false,
+ "specVersion": "V1",
+ "variant": "Qwen-Image-Edit-2509 fp8 · 本地ComfyUI · v4 结构约束 + 裁剪 + 照片化 · seed 722392476 · 30步 CFG4",
+ "view": "front"
+}

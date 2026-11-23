@@ -1,0 +1,79 @@
+{
+ "assetId": "f588792b1ec95e35a80cc1a6b58d8c3e",
+ "createdAt": 1795450633990,
+ "durationSec": 157,
+ "fileName": "outputs/E2_qwen_front_1.png",
+ "group": "E2",
+ "id": "E2_qwen_front_q03",
+ "model": "qwen",
+ "override": {},
+ "promptVersion": "r1",
+ "review": {
+  "annotations": [],
+  "at": 1795450633990,
+  "completeness": 2,
+  "forbidden": [],
+  "reviewer": "Claude（模拟专家，按 C1–C10 人工判读）",
+  "revisions": [],
+  "scores": [
+   {
+    "id": "C1",
+    "reason": "略偏橙的红",
+    "score": 1
+   },
+   {
+    "id": "C2",
+    "reason": "大面积素面缎",
+    "score": 2
+   },
+   {
+    "id": "C3",
+    "reason": "领口与带边有细金线，看不出对襟",
+    "score": 1
+   },
+   {
+    "id": "C4",
+    "reason": "袖口仅到大腿中部",
+    "score": 1
+   },
+   {
+    "id": "C5",
+    "reason": "两带平行居中，但为蓝地",
+    "score": 1
+   },
+   {
+    "id": "C6",
+    "reason": "霞帔上有绿色蟒龙与红色花云纹",
+    "score": 2
+   },
+   {
+    "id": "C7",
+    "reason": "两带各自收尖；海水江崖不明显",
+    "score": 1
+   },
+   {
+    "id": "C8",
+    "reason": "两条带各挂一个坠子，共两个",
+    "score": 1
+   },
+   {
+    "id": "C9",
+    "reason": "带子之间为红色素面，内袍缺失",
+    "score": 0
+   },
+   {
+    "id": "C10",
+    "reason": "红色小圆领，无白色交领与白带",
+    "score": 0
+   }
+  ],
+  "summary": "参考画像后整体比例与大衫颜色接近原画，但把画像胸前竖条整体理解为霞帔：蟒纹画到带上、带子变蓝、内袍消失、出现两个坠子。",
+  "verdict": "重新生成",
+  "view_ok": true
+ },
+ "seed": 1234440434,
+ "selected": false,
+ "specVersion": "V1",
+ "variant": "Qwen-Image-Edit-2509 fp8 · 本地ComfyUI · 第1轮提示词（无裁剪） · seed 1234440434 · 30步 CFG4",
+ "view": "front"
+}
