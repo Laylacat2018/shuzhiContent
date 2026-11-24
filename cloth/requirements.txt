@@ -1,0 +1,8 @@
+fastapi>=0.110
+uvicorn>=0.29
+python-multipart>=0.0.20
+httpx>=0.27
+Pillow>=11
+cryptography>=42
+segno>=1.6
+# 可选：安装 opencv-python-headless 后合拍会先做人脸数量检测

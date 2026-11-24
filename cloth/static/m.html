@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>衣冠 · 与复原服饰合影</title>
+<style>
+:root{--red:#A3362A;--ink:#2A211A;--muted:#6B5E4E;--bg:#FBF8F3;--line:#EEE6DA}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"PingFang SC","Noto Sans SC","Microsoft YaHei",sans-serif;font-size:15px;line-height:1.6;-webkit-tap-highlight-color:transparent}
+.wrap{max-width:480px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column;padding:0 16px calc(16px + env(safe-area-inset-bottom))}
+.bar{text-align:center;font-weight:700;padding:14px 0 10px;border-bottom:1px solid var(--line);margin:0 -16px 14px}
+.hero{width:100%;aspect-ratio:3/4;border-radius:14px;object-fit:cover;background:#eee;display:block}
+h1{font-family:"Songti SC","Noto Serif SC",serif;font-size:20px;margin:12px 0 4px}
+p{margin:0 0 10px;color:var(--muted);font-size:13.5px}
+.btn{display:block;width:100%;border:0;border-radius:24px;background:var(--red);color:#fff;font-size:16px;font-weight:700;padding:13px;margin-top:12px;text-align:center}
+.btn.ghost{background:transparent;color:var(--red);border:1px solid var(--red)}
+.btn[disabled]{opacity:.45}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.cap{text-align:center;color:var(--muted);font-size:12px;margin-top:10px}
+.slides{display:flex;gap:10px;overflow-x:auto;scroll-snap-type:x mandatory}
+.slides img{flex:0 0 86%;scroll-snap-align:center;aspect-ratio:3/4;object-fit:cover;border-radius:14px;border:3px solid transparent}
+.slides img.on{border-color:var(--red)}
+.sheet{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;z-index:9}
+.sheet .in{background:#fff;border-radius:20px 20px 0 0;padding:18px 18px calc(18px + env(safe-area-inset-bottom));width:100%;max-width:480px;margin:0 auto;font-size:13.5px}
+.sheet b{font-size:16px}
+.sheet li{margin:4px 0}
+label.ck{display:flex;gap:8px;align-items:flex-start;margin-top:10px}
+label.ck input{width:18px;height:18px;margin-top:2px;flex:none}
+.spin{width:160px;height:160px;border-radius:50%;border:10px solid #EEE3D3;border-top-color:var(--red);margin:40px auto 18px;animation:r 1s linear infinite}
+@keyframes r{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.spin{animation:none}}
+.tip{background:#F3ECE1;border-radius:12px;padding:12px;font-size:13px;color:#5A4B3A}
+.err{background:#FBE6E1;color:#A2361F;border-radius:10px;padding:10px;font-size:13px;margin-top:10px}
+.result{position:relative}
+.result img{width:100%;border-radius:14px;display:block;-webkit-touch-callout:default}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<div class="wrap" id="app">
+ <div class="bar" id="title">衣冠 · 与复原服饰合影</div>
+
+ <section id="s-home"><img class="hero" id="hero" alt="复原服饰">
+  <h1 id="pname">加载中…</h1><p id="pdesc"></p>
+  <button class="btn" id="go">我要合拍</button><div class="cap">由国博专家审定 · AI 复原</div><div class="err" id="home-err" hidden></div></section>
+
+ <section id="s-pick" hidden><div class="slides" id="slides"></div>
+  <div class="cap" id="pick-cap"></div><button class="btn" id="use">用这个模板</button><button class="btn ghost" id="back1">返回</button></section>
+
+ <section id="s-shot" hidden><h1>拍一张正脸照</h1><p>正对镜头、光线充足、只拍一个人。照片仅用于本次生成，完成后立即删除。</p>
+  <label class="btn" for="cam">拍照 / 从相册选择</label><input type="file" id="cam" accept="image/*" capture="user" hidden>
+  <div class="err" id="shot-err" hidden></div><button class="btn ghost" id="back2">换模板</button></section>
+
+ <section id="s-wait" hidden><div class="spin"></div><h1 style="text-align:center" id="eta">正在为你换上复原服饰…</h1>
+  <div class="tip"><b>你知道吗？</b><br><span id="fact"></span></div><div class="cap">照片仅用于本次生成，完成后即删除</div></section>
+
+ <section id="s-done" hidden><div class="result"><img id="out" alt="我的合拍照"></div>
+  <div class="cap">长按图片保存或分享 · 链接 24 小时后失效</div>
+  <div class="row2"><button class="btn ghost" id="again">重拍</button><button class="btn ghost" id="switch">换模板</button></div></section>
+</div>
+
+<div class="sheet" id="consent" hidden><div class="in">
+ <b>使用您的人脸照片前，请确认</b>
+ <ul style="padding-left:18px;margin:8px 0">
+  <li>用途：仅用于生成本次合拍照</li>
+  <li>处理方：本活动合拍服务（咪咕）</li>
+  <li>保存：<b style="font-size:13.5px">生成完成后立即删除</b>，不保存人脸特征，不用于任何训练</li>
+  <li>结果图带有“AI 生成”标识，链接 24 小时后失效</li></ul>
+ <label class="ck"><input type="checkbox" id="agree"><span>我已阅读并单独同意处理我的人脸信息</span></label>
+ <label class="ck"><input type="checkbox" id="minor"><span>我未满 14 周岁</span></label>
+ <label class="ck" id="g-row" hidden><input type="checkbox" id="guardian"><span>我是监护人，同意处理该未成年人的人脸信息</span></label>
+ <button class="btn" id="ok" disabled>同意并拍照</button><button class="btn ghost" id="no">暂不同意，只浏览</button></div></div>
+
+<script>
+const token = location.pathname.split("/").pop();
+const $ = (id) => document.getElementById(id);
+const FACTS = ["霞帔是明代命妇礼服的标志，两条带子自颈后绕到胸前，末端悬挂金坠。", "命妇礼服的外层大衫多为真红色，对襟、宽袖，袖长过膝。",
+  "内袍上的蟒纹与龙纹相似但爪数不同，是明代赐服常见纹样。", "这件复原服饰经国博服饰史专家逐项评审后定稿。"];
+let info = null, tpl = null, consent = false;
+function show(id) { for (const s of ["home", "pick", "shot", "wait", "done"]) $("s-" + s).hidden = s !== id; window.scrollTo(0, 0); }
+const fileUrl = (fid) => `/api/m-file/${token}/${fid}`;
+
+async function init() {
+  try {
+    const r = await fetch(`/api/m/${token}`);
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.message || "活动不可用");
+    info = d;
+    $("title").textContent = d.name;
+    $("pname").textContent = d.project || "复原服饰";
+    $("pdesc").textContent = d.artifact ? `依据${d.artifact}复原，经专家审定。` : "经专家审定的复原服饰。";
+    if (d.final_file) $("hero").src = fileUrl(d.final_file);
+    if (!d.templates.length) throw new Error("暂无可用模板");
+    if (d.full) throw new Error("今日合拍次数已满，欢迎明天再来");
+    $("slides").innerHTML = d.templates.map((t, i) => `<img data-id="${t.id}" class="${i === 0 ? "on" : ""}" src="${fileUrl(t.file_id)}" alt="${t.bg} ${t.pose}">`).join("");
+    tpl = d.templates[0].id;
+    $("pick-cap").textContent = `左右滑动切换 · 共 ${d.templates.length} 个模板`;
+  } catch (e) { $("home-err").textContent = e.message; $("home-err").hidden = false; $("go").disabled = true; }
+}
+$("slides").addEventListener("click", (e) => { if (e.target.dataset.id) { tpl = e.target.dataset.id; document.querySelectorAll("#slides img").forEach((x) => x.classList.toggle("on", x === e.target)); } });
+$("go").onclick = () => show("pick");
+$("back1").onclick = () => show("home");
+$("use").onclick = () => { if (consent) show("shot"); else $("consent").hidden = false; };
+const syncOk = () => { $("g-row").hidden = !$("minor").checked; $("ok").disabled = !$("agree").checked || ($("minor").checked && !$("guardian").checked); };
+["agree", "minor", "guardian"].forEach((id) => ($(id).onchange = syncOk));
+$("ok").onclick = () => { consent = true; $("consent").hidden = true; show("shot"); };
+$("no").onclick = () => { $("consent").hidden = true; show("home"); };
+$("back2").onclick = () => show("pick");
+$("again").onclick = () => show("shot");
+$("switch").onclick = () => show("pick");
+
+async function shrink(file) {
+  const bmp = await createImageBitmap(file).catch(() => null);
+  if (!bmp) return file;
+  const s = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
+  const c = document.createElement("canvas"); c.width = bmp.width * s; c.height = bmp.height * s;
+  c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
+  return await new Promise((res) => c.toBlob(res, "image/jpeg", 0.9));
+}
+
+$("cam").onchange = async (e) => {
+  const f = e.target.files[0]; e.target.value = "";
+  if (!f) return;
+  $("shot-err").hidden = true;
+  show("wait");
+  $("fact").textContent = FACTS[Math.floor(Math.random() * FACTS.length)];
+  const t0 = Date.now(), tick = setInterval(() => ($("eta").textContent = `正在生成… ${Math.round((Date.now() - t0) / 1000)} 秒`), 1000);
+  try {
+    const fd = new FormData();
+    fd.append("photo", await shrink(f), "me.jpg");
+    fd.append("template_id", tpl); fd.append("consent", "true");
+    fd.append("minor", $("minor").checked ? "true" : "false"); fd.append("guardian", $("guardian").checked ? "true" : "false");
+    const r = await fetch(`/api/m/${token}/photo`, { method: "POST", body: fd });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.message || "生成失败，请稍后再试");
+    $("out").src = `/api/m/result/${d.id}?key=${encodeURIComponent(d.key)}`;
+    $("out").oncontextmenu = $("out").ontouchstart = () => fetch(`/api/m/result/${d.id}/saved?key=${encodeURIComponent(d.key)}`, { method: "POST" });
+    show("done");
+  } catch (err) { show("shot"); $("shot-err").textContent = err.message; $("shot-err").hidden = false; }
+  finally { clearInterval(tick); }
+};
+init();
+</script>
+</body>
+</html>
