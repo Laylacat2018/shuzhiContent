@@ -1,0 +1,530 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>衣冠·AI复原工作台 v2 原型</title>
+<style>
+:root{
+  --bg:#F3F5F8; --panel:#FFFFFF; --ink:#16202B; --muted:#5A6573; --line:#DCE2E9;
+  --navy:#12304F; --blue:#1790D0; --blue-soft:#E3F1FA; --blue-ink:#0E6DA3;
+  --ok:#1B7A5A; --ok-soft:#E2F3EC; --warn:#9A5B0B; --warn-soft:#FCF0DC; --bad:#A2361F; --bad-soft:#FBE6E1;
+  --expert:#B5651D; --expert-soft:#FFF3E3; --gold:#B8862B;
+  --f-display:"Noto Serif SC","Songti SC","SimSun",serif;
+  --f-body:"Noto Sans SC","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:14px;line-height:1.6}
+h1,h2,h3,p{margin:0}
+button,input,select,textarea{font:inherit;color:inherit}
+.muted{color:var(--muted)} .mono{font-family:var(--f-mono);font-size:12px} .small{font-size:12.5px}
+.page{display:none} .page.on{display:block}
+/* header */
+.top{background:var(--navy);color:#fff}
+.top-in{max-width:1440px;margin:0 auto;padding:14px 24px 0;display:grid;gap:12px}
+.brand{display:flex;align-items:baseline;gap:16px;flex-wrap:wrap}
+.brand h1{font-family:var(--f-display);font-weight:900;font-size:22px;letter-spacing:.04em}
+.brand .sub{font-size:13px;color:#C9D6E3}
+.brand .right{margin-left:auto;display:flex;align-items:center;gap:12px;font-size:12.5px;color:#DCE8F3}
+.avatar{width:28px;height:28px;border-radius:50%;background:#2E5C86;display:inline-flex;align-items:center;justify-content:center;font-size:12px;color:#fff}
+.role{background:rgba(255,255,255,.12);border-radius:999px;padding:3px 10px}
+.bell{position:relative;background:rgba(255,255,255,.12);border-radius:999px;padding:3px 10px}
+.bell b{background:#E35D3F;color:#fff;border-radius:999px;padding:0 6px;font-size:11px;margin-left:4px}
+.tabs{display:flex;gap:2px}
+.tabs a{padding:10px 16px;color:#C9D6E3;text-decoration:none;border-bottom:3px solid transparent;font-size:14px}
+.tabs a.on{color:#fff;border-bottom-color:var(--blue);font-weight:700}
+.steps{display:flex;gap:2px}
+.steps a{flex:1 0 auto;display:flex;align-items:center;gap:8px;padding:10px 12px;color:#C9D6E3;text-decoration:none;border-bottom:3px solid transparent;font-size:14px;white-space:nowrap}
+.steps .n{width:22px;height:22px;border-radius:50%;border:1px solid #6F8BA8;display:inline-flex;align-items:center;justify-content:center;font-size:12px}
+.steps a.on{color:#fff;border-bottom-color:var(--blue);font-weight:700}
+.steps a.on .n{background:var(--blue);border-color:var(--blue)}
+.steps a.done .n{background:#2E6B4F;border-color:#2E6B4F}
+.steps a.todo .n{background:#E35D3F;border-color:#E35D3F;color:#fff}
+.steps .ex{font-size:10px;color:#F3C58F;border:1px solid #8A6A45;border-radius:4px;padding:0 4px}
+/* layout */
+.wrap{max-width:1440px;margin:0 auto;padding:20px 24px 40px;display:grid;grid-template-columns:280px minmax(0,1fr);gap:20px;align-items:start}
+.full{max-width:1440px;margin:0 auto;padding:20px 24px 40px;display:grid;gap:16px}
+.ref{display:grid;gap:12px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
+.card h2{font-size:16px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.card h3{font-size:14px;margin-bottom:6px}
+main{display:grid;gap:16px;min-width:0}
+.head{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap}
+.head h2{font-size:22px;font-family:var(--f-display);font-weight:900}
+.head p{color:var(--muted);max-width:72ch}
+.sp{flex:1}
+.portrait{width:100%;border-radius:8px;display:block}
+.crops{display:grid;grid-template-columns:repeat(5,1fr);gap:4px}
+.crop{aspect-ratio:3/4;border-radius:4px;background-image:url(img/shi.jpg);background-repeat:no-repeat}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;font-size:12.5px} .kv dt{color:var(--muted)} .kv dd{margin:0}
+.pill{display:inline-flex;align-items:center;gap:4px;font-size:12px;border-radius:999px;padding:2px 10px;white-space:nowrap}
+.pill.expert{background:var(--expert-soft);color:var(--expert);border:1px solid #E8C79F;font-weight:700}
+.tag{display:inline-block;font-size:12px;border-radius:6px;padding:1px 8px;white-space:nowrap}
+.L1{background:var(--ok-soft);color:var(--ok)} .L2{background:var(--blue-soft);color:var(--blue-ink)} .L3{background:var(--warn-soft);color:var(--warn)} .L4{background:var(--bad-soft);color:var(--bad)}
+.miss{background:var(--bg);color:var(--muted);border:1px solid var(--line)} .rule{background:var(--ink);color:#fff}
+.st-ok{background:var(--ok-soft);color:var(--ok)} .st-wait{background:var(--bg);color:var(--muted);border:1px solid var(--line)} .st-doubt{background:var(--bad-soft);color:var(--bad)} .st-need{background:var(--warn-soft);color:var(--warn)}
+.btn{min-height:36px;padding:0 14px;border-radius:8px;border:1px solid var(--line);background:var(--panel);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap;text-decoration:none;color:var(--ink);font-size:13.5px}
+.btn.pri{background:var(--blue);border-color:var(--blue);color:#fff} .btn.ok{background:var(--ok);border-color:var(--ok);color:#fff}
+.btn.warn{color:var(--bad);border-color:var(--bad)} .btn.sm{min-height:28px;padding:0 10px;font-size:12.5px} .btn[disabled]{opacity:.45}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;padding:8px 10px;background:var(--bg);color:var(--muted);font-weight:700;font-size:12px;white-space:nowrap}
+td{padding:8px 10px;border-top:1px solid var(--line);vertical-align:top}
+.seg{display:flex;flex-wrap:wrap;gap:6px}
+.seg button{min-height:34px;padding:0 12px;border-radius:8px;border:1px solid var(--line);background:var(--panel);font-size:13px}
+.seg button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px} .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px} .grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.drop{border:2px dashed #9CC9E6;background:var(--blue-soft);border-radius:10px;padding:18px;text-align:center;color:var(--blue-ink);display:grid;gap:6px;justify-items:center}
+.alert{border-radius:8px;padding:10px 12px;font-size:13px;background:var(--warn-soft);color:var(--warn)} .alert.info{background:var(--blue-soft);color:var(--blue-ink)} .alert.ok{background:var(--ok-soft);color:var(--ok)}
+.shot{border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--panel)}
+.shot .im{aspect-ratio:3/4;background:var(--bg);display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative}
+.shot .im img{width:100%;height:100%;object-fit:contain}
+.shot .meta{padding:8px 10px;display:grid;gap:4px;font-size:12px}
+.row{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.score{font-weight:700;font-variant-numeric:tabular-nums}
+.chip{display:inline-flex;align-items:center;gap:4px;font-size:12px;border:1px solid var(--line);border-radius:6px;padding:1px 8px;background:var(--bg)}
+.chip.src::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--blue)}
+label.f{display:grid;gap:4px;font-size:12.5px;color:var(--muted)}
+label.f select,label.f input,label.f textarea{width:100%;min-width:0} .card{min-width:0}
+label.f input,label.f select,label.f textarea,.input{min-height:34px;border:1px solid var(--line);border-radius:8px;padding:6px 10px;background:var(--panel);color:var(--ink);font-size:13px}
+.formrow{display:flex;flex-wrap:wrap;gap:10px;align-items:end}
+.progress{height:8px;border-radius:4px;background:var(--bg);overflow:hidden} .progress i{display:block;height:100%;background:var(--blue)}
+.dots{display:flex;gap:4px} .dots span{width:26px;height:26px;border-radius:6px;border:1px solid var(--line);display:inline-flex;align-items:center;justify-content:center;font-size:12px}
+.dots span.on{background:var(--blue);border-color:var(--blue);color:#fff}
+.mark{position:absolute;transform:translate(-50%,-50%);border:3px solid var(--bad);border-radius:50%;width:30px;height:30px}
+.mark span{position:absolute;top:-12px;right:-12px;background:var(--bad);color:#fff;font-size:11px;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700}
+.mark.box{border-radius:6px} .mark.ok{border-color:var(--ok)} .mark.ok span{background:var(--ok)} .mark.doubt{border-color:var(--warn)} .mark.doubt span{background:var(--warn)}
+.thread{border-left:3px solid var(--line);padding-left:10px;display:grid;gap:6px;font-size:12.5px}
+.who{font-weight:700} .hash{word-break:break-all;background:var(--bg);border-radius:6px;padding:8px;font-family:var(--f-mono);font-size:12px}
+.fake-img{background:linear-gradient(135deg,#E9EEF3,#D9E1E9);display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:12px}
+.vote{display:inline-flex;align-items:center;gap:4px;background:var(--expert-soft);color:var(--expert);border-radius:999px;padding:1px 8px;font-size:12px;font-weight:700}
+.diff-add{background:var(--ok-soft)} .diff-del{background:var(--bad-soft);text-decoration:line-through;color:var(--bad)}
+/* phone */
+.phones{display:flex;gap:28px;justify-content:center;flex-wrap:wrap;padding:28px 24px}
+.phone{width:300px;height:620px;border-radius:40px;background:#0E1116;padding:12px;box-shadow:0 1px 0 rgba(0,0,0,.05)}
+.screen{width:100%;height:100%;border-radius:30px;overflow:hidden;background:#FBF8F3;position:relative;display:flex;flex-direction:column;font-size:13px}
+.sbar{height:30px;display:flex;justify-content:space-between;align-items:center;padding:0 22px;font-size:12px;font-weight:700}
+.mtitle{text-align:center;font-weight:700;padding:4px 0 8px;border-bottom:1px solid #EEE6DA}
+.mbody{flex:1;padding:14px;display:grid;gap:10px;align-content:start;overflow:hidden}
+.mbtn{background:#A3362A;color:#fff;border-radius:22px;text-align:center;padding:11px;font-weight:700}
+.mbtn.ghost{background:transparent;color:#A3362A;border:1px solid #A3362A}
+.cap{text-align:center;color:#6B5E4E;font-size:12px;margin-top:6px}
+.steplabel{font-family:var(--f-display);font-weight:900;font-size:15px;text-align:center;margin-bottom:8px}
+</style>
+</head>
+<body>
+
+<!-- ============ 公共：工作台头部（项目内） ============ -->
+<template id="tpl-proj-head">
+<header class="top"><div class="top-in">
+  <div class="brand"><h1>衣冠 · AI复原工作台</h1><span class="sub">明《李言恭配临淮侯夫人史氏像》命妇礼服 · 中国国家博物馆藏</span>
+   <span class="right"><span class="bell">待我处理<b>3</b></span><span class="role">主审专家</span><span class="avatar">王</span></span></div>
+  <nav class="steps" data-steps></nav>
+</div></header>
+</template>
+<template id="tpl-ref">
+<aside class="ref">
+ <section class="card"><h2>复原依据 <span class="tag L2">主史料</span></h2>
+  <img class="portrait" src="img/shi.jpg" alt="史氏像">
+  <p class="small muted" style="margin-top:6px">国博官网 · 407×709 · 仅研究用途 · SHA-256 aecca2ed…</p></section>
+ <section class="card"><h3>局部放大</h3><div class="crops" data-crops></div></section>
+ <section class="card"><h3>规格书 <span data-specver>V2 草稿</span></h3>
+  <dl class="kv"><dt>款式</dt><dd>大衫 + 霞帔 + 内袍</dd><dt>大衫</dt><dd>真红素面，对襟细金边</dd><dt>霞帔</dt><dd>两带并合下垂，金地云霞翟纹</dd><dt>坠子</dt><dd>金色水滴形</dd><dt>内袍</dt><dd>金地，青绿蟒纹</dd><dt>领口</dt><dd>白色交领护领</dd></dl></section>
+</aside>
+</template>
+<template id="tpl-admin-head">
+<header class="top"><div class="top-in">
+  <div class="brand"><h1>衣冠 · AI复原工作台</h1><span class="sub">中国国家博物馆 × 咪咕</span>
+   <span class="right"><span class="bell">待我处理<b>3</b></span><span class="role" data-role>主审专家</span><span class="avatar">王</span></span></div>
+  <nav class="tabs" data-tabs><a data-t="p01">复原项目</a><a data-t="p09">合拍模板</a><a data-t="p11">系统设置</a></nav>
+</div></header>
+</template>
+
+<!-- ============ P01 ============ -->
+<section class="page" id="p01" data-head="admin" data-tab="p01">
+<div class="full">
+ <div class="head"><div><h2>复原项目</h2><p>我参与的 3 个项目，按最近更新排序。</p></div><span class="sp"></span>
+  <input class="input" placeholder="搜索项目名称" style="width:220px"><select class="input"><option>全部朝代</option></select><select class="input"><option>全部步骤</option></select>
+  <button class="btn pri">＋ 新建复原项目</button></div>
+ <div style="display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:16px;align-items:start">
+  <div class="grid3">
+   <div class="card" style="padding:0;overflow:hidden">
+    <div style="height:180px;background:url(img/shi.jpg) center 35%/cover"></div>
+    <div style="padding:14px;display:grid;gap:8px">
+     <b style="font-size:15px">明 · 临淮侯夫人史氏命妇礼服</b><span class="small muted">《李言恭配临淮侯夫人史氏像》· 中国国家博物馆</span>
+     <div class="row"><span class="tag L2">⑤ 对比选择</span><span class="tag st-need">待我处理 2</span></div>
+     <div class="progress"><i style="width:64%"></i></div>
+     <div class="row small muted"><span>主审 王老师 · 专家 3 人</span><span class="sp"></span><span>2 小时前</span></div>
+    </div></div>
+   <div class="card" style="padding:0;overflow:hidden">
+    <div class="fake-img" style="height:180px">赐服残片照片（示例）</div>
+    <div style="padding:14px;display:grid;gap:8px">
+     <b style="font-size:15px">明 · 衍圣公赐服（男子）</b><span class="small muted">孔子博物馆藏 · 第二个样本</span>
+     <div class="row"><span class="tag L2">② 形制规格书</span><span class="tag st-need">待我处理 1</span></div>
+     <div class="progress"><i style="width:22%"></i></div>
+     <div class="row small muted"><span>主审 李老师 · 专家 2 人</span><span class="sp"></span><span>昨天</span></div>
+    </div></div>
+   <div class="card" style="padding:0;overflow:hidden">
+    <div class="fake-img" style="height:180px">宋代画像局部（示例）</div>
+    <div style="padding:14px;display:grid;gap:8px">
+     <b style="font-size:15px">宋 · 皇后礼服（预研）</b><span class="small muted">台北故宫藏画像 · 史料收集中</span>
+     <div class="row"><span class="tag st-wait">① 史料汇集</span></div>
+     <div class="progress"><i style="width:8%"></i></div>
+     <div class="row small muted"><span>主审 王老师 · 专家 1 人</span><span class="sp"></span><span>3 天前</span></div>
+    </div></div>
+  </div>
+  <section class="card"><h2>待我处理 <span class="tag st-need">3</span></h2>
+   <div style="display:grid;gap:10px;font-size:13px">
+    <div><b>史氏像 · 评审截止今天 18:00</b><div class="muted small">还有 2 张候选图未评，点击进入 ⑤</div></div>
+    <div><b>史氏像 · 对比选择</b><div class="muted small">3 位专家已提交，请确定入选版本</div></div>
+    <div><b>衍圣公赐服 · 规格书</b><div class="muted small">F7「补子纹样」有 1 条批注 @ 了你</div></div>
+   </div></section>
+ </div>
+ <section class="card" style="max-width:640px">
+  <h2>新建复原项目（弹窗示意）</h2>
+  <div class="grid2">
+   <label class="f">项目名称 *<input value="明 · 衍圣公赐服（男子）"></label>
+   <label class="f">服饰类别 *<select><option>男子服饰 · 赐服</option></select></label>
+   <label class="f">朝代<select><option>明</option></select></label>
+   <label class="f">主审专家 *<select><option>李老师（孔子博物馆）</option></select></label>
+   <label class="f" style="grid-column:1/-1">邀请评审专家<input value="王老师、张老师"></label>
+  </div>
+  <div class="row" style="margin-top:12px"><span class="sp"></span><button class="btn">取消</button><button class="btn pri">创建并进入史料汇集</button></div>
+ </section>
+</div>
+</section>
+
+<!-- ============ P02 ============ -->
+<section class="page" id="p02" data-head="proj" data-step="1">
+<div class="wrap"><div data-ref></div><main>
+ <div class="head"><div><h2>① 史料汇集</h2><p>上传或检索复原依据；AI 先读图，专家逐行确认。所有史料记录来源、许可和哈希。</p></div><span class="sp"></span><span class="pill expert">专家节点 · 确认史料范围</span><button class="btn ok">确认史料范围</button></div>
+ <section class="card" style="display:grid;gap:12px">
+  <div class="seg"><button>本地上传</button><button class="on">名称检索</button><button>粘贴链接</button></div>
+  <div class="formrow"><input class="input" style="flex:1" value="史氏像 明代命妇 大衫霞帔"><select class="input"><option>全部白名单（12 家）</option></select><button class="btn pri">检索</button></div>
+  <div class="grid4">
+   <div class="shot"><div class="im" style="aspect-ratio:4/3;background:url(img/shi.jpg) center 30%/cover"></div><div class="meta"><b>李言恭配临淮侯夫人史氏像</b><span class="muted">明 · 中国国家博物馆</span><div class="row"><span class="tag L1">国家级</span><span class="tag st-need">仅研究</span></div><div class="row"><span class="tag st-ok">已入库</span><span class="sp"></span><a class="small">原页 ↗</a></div></div></div>
+   <div class="shot"><div class="im fake-img" style="aspect-ratio:4/3">命妇像（缩略图）</div><div class="meta"><b>明人画命妇像轴</b><span class="muted">明 · 故宫博物院</span><div class="row"><span class="tag L1">国家级</span><span class="tag st-need">仅研究</span></div><div class="row"><button class="btn sm pri">入库</button><span class="sp"></span><a class="small">原页 ↗</a></div></div></div>
+   <div class="shot"><div class="im fake-img" style="aspect-ratio:4/3">霞帔实物（缩略图）</div><div class="meta"><b>大红罗地云霞翟纹霞帔</b><span class="muted">明 · 孔子博物馆</span><div class="row"><span class="tag L2">省级及重点馆</span><span class="tag st-need">仅研究</span></div><div class="row"><button class="btn sm pri">入库</button><span class="sp"></span><a class="small">原页 ↗</a></div></div></div>
+   <div class="shot"><div class="im fake-img" style="aspect-ratio:4/3">Robe（缩略图）</div><div class="meta"><b>Woman's Court Robe</b><span class="muted">Ming · The Met</span><div class="row"><span class="tag L3">海外</span><span class="tag st-ok">CC0 开放</span></div><div class="row"><button class="btn sm pri">入库</button><span class="sp"></span><a class="small">原页 ↗</a></div></div></div>
+  </div>
+  <p class="small muted">只在白名单内检索：国家级 2 家、省级及重点馆 6 家、海外 4 家。白名单外的网址不能入库，请联系技术人员在“系统设置”添加。</p>
+ </section>
+ <div class="grid2">
+  <section class="card"><h2>史料库 <span class="muted small">5 条</span><span class="sp"></span><div class="drop" style="padding:6px 12px;display:inline-flex">拖拽图片到这里 · 或 选择文件</div></h2>
+   <table><thead><tr><th>史料</th><th>类型</th><th>许可</th><th>等级</th></tr></thead><tbody>
+    <tr><td><b>史氏像（主史料）</b><div class="mono muted">aecca2ed…81c0</div></td><td>画像</td><td><span class="tag st-need">仅研究</span></td><td><span class="tag L2">L2</span></td></tr>
+    <tr><td>史氏像 · 霞帔局部（框选）</td><td>局部</td><td><span class="tag st-need">仅研究</span></td><td><span class="tag L2">L2</span></td></tr>
+    <tr><td>大红罗地云霞翟纹霞帔</td><td>实物</td><td><span class="tag st-need">仅研究</span></td><td><span class="tag L3">L3</span></td></tr>
+    <tr><td>高清扫描 TIFF（申请中）</td><td>画像</td><td><span class="tag st-wait">待获取</span></td><td>—</td></tr>
+   </tbody></table></section>
+  <section class="card"><h2>文献</h2>
+   <table><thead><tr><th>文献</th><th>原文摘录</th><th>状态</th></tr></thead><tbody>
+    <tr><td>《大明会典》冠服 · 命妇冠服</td><td class="small">“……大衫霞帔……深青霞帔，织金云霞翟文……”</td><td><span class="tag st-ok">已录入</span></td></tr>
+    <tr><td>《明史 · 舆服志》</td><td class="small muted">待录入原文</td><td><span class="tag st-wait">待录入</span></td></tr>
+    <tr><td>岐阳世泽展览说明</td><td class="small">人物身份与年代</td><td><span class="tag st-ok">已录入</span></td></tr>
+   </tbody></table><button class="btn sm" style="margin-top:8px">＋ 添加文献</button></section>
+ </div>
+ <section class="card"><h2>画像观察记录 <span class="tag L3">AI 初读 4 / 专家已确认 2</span><span class="sp"></span><button class="btn sm">＋ 新增部位</button></h2>
+  <table><thead><tr><th>部位</th><th>画像所见</th><th>待专家判断</th><th>状态</th><th></th></tr></thead><tbody>
+   <tr><td><b>外层大衫</b></td><td>真红，素面无纹，对襟，前襟细金边，袖极宽大垂过膝</td><td class="muted">是否为礼服“大衫”</td><td><span class="tag st-ok">王老师已确认</span></td><td><button class="btn sm">编辑</button></td></tr>
+   <tr style="background:var(--blue-soft)"><td><b>前胸垂带</b></td><td><textarea class="input" style="width:100%;height:56px">两条金地宽带并排自颈下垂至足前，满饰云霞与禽鸟纹，下段海水江崖，末端并合收尖，悬金色水滴形坠子</textarea></td><td><input class="input" style="width:100%" value="翟纹还是蟒纹，需对照会典"></td><td><span class="tag st-need">编辑中</span></td><td><button class="btn sm pri">保存</button></td></tr>
+   <tr><td><b>内层袍服</b></td><td>领口、胸前与两侧下摆可见金地五彩织纹，胸前可见青色蟒首</td><td class="muted">内袍种类</td><td><span class="tag L3">AI 初读</span></td><td><button class="btn sm">编辑</button></td></tr>
+   <tr><td><b>领口与腰间</b></td><td>白色护领；一条白色长带自前腰垂下，右手持白色物</td><td class="muted">白带名称与用途</td><td><span class="tag L3">AI 初读</span></td><td><button class="btn sm">编辑</button></td></tr>
+  </tbody></table></section>
+</main></div>
+</section>
+
+<!-- ============ P03 ============ -->
+<section class="page" id="p03" data-head="proj" data-step="2">
+<div class="wrap"><div data-ref></div><main>
+ <div class="head"><div><h2>② 形制规格书</h2><p>每个字段标证据等级并关联史料；专家逐字段编辑、校对和批注，主审签署后锁定为版本。</p></div><span class="sp"></span>
+  <div class="seg"><button>V1 · 已签署 11-20</button><button class="on">V2 · 草稿</button></div><button class="btn">版本对比</button><button class="btn ok" disabled>签署 V2（2 项未完成）</button></div>
+ <div class="alert">签署前需全部字段“已校对”且无未解决批注：F4 有异议、F7 待审。</div>
+ <section class="card" style="padding:0;overflow:hidden">
+  <table><thead><tr><th>编号</th><th>字段</th><th style="width:34%">内容</th><th>证据等级</th><th>依据</th><th>审核状态</th><th>操作</th></tr></thead><tbody>
+   <tr><td class="mono">F1</td><td><b>款式</b></td><td>命妇礼服：大衫 + 霞帔 + 内袍；无头无臂白色人台</td><td><span class="tag L2">L2 史料有载</span></td><td><span class="chip src">史氏像</span> <span class="chip src">会典</span></td><td><span class="tag st-ok">已校对 · 王</span></td><td><button class="btn sm">编辑</button></td></tr>
+   <tr><td class="mono">F2</td><td><b>大衫颜色与纹样</b></td><td>鲜亮正红，素面无纹，不偏暗红或酒红</td><td><span class="tag L2">L2 史料有载</span></td><td><span class="chip src">史氏像</span></td><td><span class="tag st-ok">已校对 · 李</span></td><td><button class="btn sm">编辑</button></td></tr>
+   <tr><td class="mono">F3</td><td><b>大衫襟式与袖型</b></td><td>对襟，前襟细金边；宽大垂袖，袖长过膝</td><td><span class="tag L2">L2 史料有载</span></td><td><span class="chip src">史氏像</span></td><td><span class="tag st-ok">已校对 · 王</span></td><td><button class="btn sm">编辑</button></td></tr>
+   <tr style="background:#FFFBF3"><td class="mono">F4</td><td><b>霞帔位置与形态</b></td><td>
+     <textarea class="input" style="width:100%;height:64px">两条带子自颈后经两肩绕到胸前，并排垂于身前正中，下端并合收尖；单条宽度不超过肩宽的三分之一，不得做成背心</textarea>
+     <div class="thread" style="margin-top:8px">
+      <div><span class="who">张老师</span> <span class="muted">11-23 10:12</span><br>画像中两带是并排还是重叠？建议对照孔博实物霞帔补证。</div>
+      <div><span class="who">王老师</span> <span class="muted">11-23 11:40</span><br>同意补证，先按并排写，@李老师 请确认实物宽度。</div>
+      <input class="input" placeholder="回复批注，@ 提及专家" style="width:100%">
+     </div></td>
+     <td><select class="input"><option>L2 史料有载</option><option>L3 同类推定</option></select></td>
+     <td><span class="chip src">史氏像</span><br><span class="chip src">孔博霞帔</span><br><a class="small">＋ 关联史料</a></td>
+     <td><span class="tag st-doubt">有异议 · 2 条批注</span></td><td><button class="btn sm pri">保存</button></td></tr>
+   <tr><td class="mono">F5</td><td><b>霞帔纹样</b></td><td>金地，云霞翟纹为主，下段海水江崖</td><td><span class="tag L3">L3 同类推定</span></td><td><span class="chip src">会典</span> <span class="chip src">孔博霞帔</span></td><td><span class="tag st-ok">已校对 · 王</span></td><td><button class="btn sm">编辑</button></td></tr>
+   <tr><td class="mono">F6</td><td><b>坠子</b></td><td>金色水滴形，宽约霞帔宽度三分之一</td><td><span class="tag L2">L2 史料有载</span></td><td><span class="chip src">史氏像</span></td><td><span class="tag st-ok">已校对 · 李</span></td><td><button class="btn sm">编辑</button></td></tr>
+   <tr><td class="mono">F7</td><td><b>内袍</b></td><td>金地蟒袍：胸前一条大蟒，通袖襕、膝襕</td><td><span class="tag L3">L3 同类推定</span></td><td><span class="chip src">史氏像</span></td><td><span class="tag st-wait">待审</span></td><td><button class="btn sm">编辑</button> <button class="btn sm">校对通过</button></td></tr>
+   <tr><td class="mono">F12</td><td><b>禁用元素</b></td><td><div class="row"><span class="tag rule">马蹄袖</span><span class="tag rule">盘扣</span><span class="tag rule">背心式霞帔</span><span class="tag rule">清式立领</span><span class="tag rule">云肩</span><span class="tag rule">大衫刺绣</span><a class="small">＋ 添加</a></div></td><td><span class="tag rule">规则</span></td><td class="muted">生成约束 + 评审核对</td><td><span class="tag st-ok">已校对 · 王</span></td><td><button class="btn sm">编辑</button></td></tr>
+  </tbody></table>
+  <div class="row" style="padding:10px 14px;border-top:1px solid var(--line)"><button class="btn sm">＋ 新增自定义字段</button><span class="small muted">如：冠服搭配、织造工艺。默认字段可标“不适用”，不能删除。</span></div>
+ </section>
+ <section class="card"><h2>AI 收到的提示词（只读预览）<span class="sp"></span><span class="small muted">随字段修改实时更新</span></h2>
+  <p class="small muted">【服装结构】1. 外层大衫：鲜亮正红素面……2. 霞帔：两条带子自颈后经两肩绕到胸前，并排垂于身前正中，下端并合收尖……【禁止出现】马蹄袖、盘扣、背心式霞帔……</p></section>
+</main></div>
+</section>
+
+<!-- ============ P04 ============ -->
+<section class="page" id="p04" data-head="proj" data-step="3">
+<div class="wrap"><div data-ref></div><main>
+ <div class="head"><div><h2>③ AI 生成</h2><p>点“生成”后系统自动调用各模型，结果回到下方画廊；不需要到外部网站复制提示词。</p></div></div>
+ <div class="grid3">
+  <section class="card" style="border-color:var(--ok)"><h2>① 生成初稿 <span class="tag st-ok">已完成</span></h2><p class="small muted">依据规格书 V1，文字 + 主史料参考图，四个模型并行。</p><p class="small" style="margin-top:6px">16 张 · 11-21 完成 · 已评审 16</p></section>
+  <section class="card" style="border:2px solid var(--blue)"><h2>② 修订重生成 <span class="tag L2">当前</span></h2><p class="small muted">依据规格书 V2，以入选版本为参考，只改修订项。</p>
+   <div class="formrow" style="margin-top:8px"><label class="f">视角<select><option>正面</option><option>正 + 侧 + 背</option></select></label><label class="f">每模型张数<select><option>2</option></select></label></div>
+   <div class="row" style="margin-top:8px"><label class="chip"><input type="checkbox" checked> Nano Banana</label><label class="chip"><input type="checkbox" checked> Seedream</label><label class="chip"><input type="checkbox" checked> GPT Image</label><label class="chip"><input type="checkbox" checked> Qwen 本地</label></div>
+   <button class="btn pri" style="margin-top:10px;width:100%">生成 8 张（预计 4 分钟）</button></section>
+  <section class="card"><h2>③ 展示应用</h2><p class="small muted">定稿后生成合拍模板，转到“合拍模板”页。</p><button class="btn" style="margin-top:10px" disabled>定稿后可用</button></section>
+ </div>
+ <section class="card"><h2>任务进度 · 修订重生成 #2 <span class="sp"></span><span class="small muted">11-24 09:32 发起 · 王老师</span></h2>
+  <table><thead><tr><th>模型</th><th>状态</th><th style="width:40%">进度</th><th>用时</th><th></th></tr></thead><tbody>
+   <tr><td><b>Nano Banana</b> <span class="muted small">Gemini API</span></td><td><span class="tag st-ok">完成 2/2</span></td><td><div class="progress"><i style="width:100%"></i></div></td><td>48 秒</td><td></td></tr>
+   <tr><td><b>Seedream</b> <span class="muted small">火山方舟</span></td><td><span class="tag st-ok">完成 2/2</span></td><td><div class="progress"><i style="width:100%"></i></div></td><td>61 秒</td><td></td></tr>
+   <tr><td><b>GPT Image</b> <span class="muted small">OpenAI</span></td><td><span class="tag st-doubt">失败 · 超时</span></td><td><div class="progress"><i style="width:50%;background:var(--bad)"></i></div></td><td>—</td><td><button class="btn sm">单独重试</button></td></tr>
+   <tr><td><b>Qwen-Image-Edit</b> <span class="muted small">本地 RTX 4090</span></td><td><span class="tag L2">生成中 1/2</span></td><td><div class="progress"><i style="width:65%"></i></div></td><td>约 2 分钟</td><td></td></tr>
+  </tbody></table></section>
+ <section class="card"><h2>结果画廊 <span class="seg" style="margin-left:8px"><button class="on">修订重生成</button><button>生成初稿</button></span><span class="sp"></span><span class="small muted">点击图片查看来源：模型版本、规格书版本、参考图</span></h2>
+  <div class="grid4">
+   <div class="shot"><div class="im"><img src="img/nb2.jpg"></div><div class="meta"><b>Nano Banana · 正面 1</b><span class="muted">规格书 V2 · 48 秒</span></div></div>
+   <div class="shot"><div class="im"><img src="img/sd1.webp"></div><div class="meta"><b>Seedream · 正面 1</b><span class="muted">规格书 V2 · 61 秒</span></div></div>
+   <div class="shot"><div class="im"><img src="img/qwen1.webp"></div><div class="meta"><b>Qwen 本地 · 正面 1</b><span class="muted">规格书 V2 · 134 秒</span></div></div>
+   <div class="shot"><div class="im fake-img">生成中…</div><div class="meta"><b>Qwen 本地 · 正面 2</b><span class="muted">排队中</span></div></div>
+  </div></section>
+ <div class="alert info">实验模式（仅技术角色可见）：E0–E4 分组、提示词编辑、指定种子、对照统计导出，在页面右上角“实验模式”开关中打开。</div>
+</main></div>
+</section>
+
+<!-- ============ P05 ============ -->
+<section class="page" id="p05" data-head="proj" data-step="4">
+<div class="wrap"><div data-ref></div><main>
+ <div class="head"><div><h2>④ 专家评审</h2><p>每位专家独立打分；提交前看不到他人的分数。AI 预评只作参考，不计入专家分。</p></div><span class="sp"></span><span class="pill expert">盲评已开启</span><span class="small muted">截止 今天 18:00</span></div>
+ <section class="card"><div class="row" style="gap:16px">
+  <b>评审进度</b>
+  <span class="chip">王老师 <span class="tag st-ok">已提交 8/8</span></span><span class="chip">李老师 <span class="tag L2">评审中 5/8</span></span><span class="chip">张老师 <span class="tag st-wait">未开始 0/8</span></span>
+  <span class="sp"></span><select class="input"><option>候选 C（3/8）</option></select><button class="btn">上一张</button><button class="btn">下一张</button></div></section>
+ <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:16px">
+  <section class="card"><h2>候选 C <span class="muted small">模型名已隐藏</span><span class="sp"></span><div class="seg"><button class="on">候选图</button><button>对照原画局部</button></div></h2>
+   <div class="shot" style="border:none"><div class="im" style="aspect-ratio:auto;height:560px">
+    <img src="img/gpt.webp" style="height:100%;width:auto">
+    <div class="mark box" style="left:50%;top:16%;width:150px;height:70px"><span>1</span></div>
+    <div class="mark doubt" style="left:50%;top:6%"><span>2</span></div>
+    <div class="mark ok" style="left:47%;top:15%;width:22px;height:22px"><span>3</span></div>
+   </div></div>
+   <ol class="small" style="margin:8px 0 0;padding-left:20px"><li><b>错误</b> 上身做成覆盖双肩的背心，接近清制背心式霞帔（F4）</li><li><b>存疑</b> 白色领口像立领，应为交领（F8）</li><li><b>亮点</b> 胸前双眼蟒首还原度高（F7）</li></ol>
+   <div class="row" style="margin-top:8px"><button class="btn sm">○ 点标注</button><button class="btn sm">□ 框选标注</button><span class="small muted">标注严重程度：错误 / 存疑 / 亮点</span></div>
+  </section>
+  <section class="card"><h2>我的评分 <span class="score">13 / 20</span><span class="sp"></span><span class="small muted">模板：命妇礼服 v2 · 11 项</span></h2>
+   <table><thead><tr><th>项</th><th>评分项（权重）</th><th>我的打分</th><th>AI 预评</th></tr></thead><tbody>
+    <tr><td class="mono">C1</td><td>大衫为真红，不偏橙或粉（1）</td><td><div class="dots"><span>0</span><span>1</span><span class="on">2</span></div></td><td class="muted">2</td></tr>
+    <tr><td class="mono">C3</td><td>对襟，前襟细金边（1）</td><td><div class="dots"><span>0</span><span class="on">1</span><span>2</span></div></td><td class="muted">1</td></tr>
+    <tr><td class="mono">C5</td><td>霞帔居中下垂、两带并合（2）<div class="small" style="color:var(--bad)">评语：上身成背心，两带未分开</div></td><td><div class="dots"><span class="on">0</span><span>1</span><span>2</span></div></td><td class="muted">1</td></tr>
+    <tr><td class="mono">C6</td><td>霞帔云霞翟纹（1）</td><td><div class="dots"><span>0</span><span>1</span><span class="on">2</span></div></td><td class="muted">2</td></tr>
+    <tr><td class="mono">C9</td><td>内袍金地蟒纹可见（1）</td><td><div class="dots"><span>0</span><span>1</span><span class="on">2</span></div></td><td class="muted">2</td></tr>
+    <tr><td class="mono">C10</td><td>白色交领、腰前白带（1）</td><td><div class="dots"><span>0</span><span class="on">1</span><span>2</span></div></td><td class="muted">1</td></tr>
+    <tr style="background:var(--expert-soft)"><td class="mono">C11</td><td><b>织造工艺合理性（2）</b> <span class="tag L3">主审新增</span><div class="small muted">0–5 分：妆花、织金等工艺表现是否可信</div></td><td><div class="dots"><span>1</span><span>2</span><span class="on">3</span><span>4</span><span>5</span></div></td><td class="muted">—</td></tr>
+    <tr><td colspan="4" class="small muted">… 其余 4 项（C2 C4 C7 C8）已评</td></tr>
+   </tbody></table>
+   <div style="display:grid;gap:8px;margin-top:10px">
+    <div class="row"><b>禁用元素</b><label class="chip"><input type="checkbox" checked> 背心式霞帔</label><label class="chip"><input type="checkbox"> 立领</label><label class="chip"><input type="checkbox"> 盘扣</label></div>
+    <label class="f">总体专业意见<textarea class="input" style="height:54px">纹样与配色最贴近画像，蟒首几乎复刻原作；结构把上身金地区域理解成背心，需在规格书明确内袍与霞帔分层。</textarea></label>
+    <label class="f">修订建议（写入规格书的句子）<input class="input" value="F4 霞帔为两条带子并排垂于身前正中，不得做成覆盖双肩的背心"></label>
+    <div class="row"><b>结论</b><div class="seg"><button>通过</button><button>重新生成</button><button class="on">退回改规格书</button></div><span class="sp"></span><button class="btn pri">提交评审</button></div>
+   </div></section>
+ </div>
+</main></div>
+</section>
+
+<!-- ============ P06 ============ -->
+<section class="page" id="p06" data-head="proj" data-step="5">
+<div class="wrap"><div data-ref></div><main>
+ <div class="head"><div><h2>⑤ 对比选择</h2><p>系统按专家评分推荐，专家也可推荐自己认为最合适的版本；以主审的选择为准。</p></div><span class="sp"></span><span class="small muted">3 位专家已全部提交 · 盲评已揭晓</span></div>
+ <section class="card" style="padding:0;overflow:hidden"><table><thead><tr><th>阶段 \ 模型</th><th>Nano Banana</th><th>Seedream</th><th>GPT Image</th><th>Qwen 本地</th></tr></thead><tbody>
+  <tr><td><b>生成初稿</b></td><td style="background:var(--ok-soft)"><span class="score">91.5</span> <span class="small muted">禁用 0</span></td><td><span class="score">80.0</span> <span class="small muted">禁用 0</span></td><td><span class="score">69.0</span> <span class="small" style="color:var(--bad)">禁用 1</span></td><td><span class="score">58.3</span> <span class="small" style="color:var(--bad)">禁用 4</span></td></tr>
+  <tr><td><b>修订重生成</b></td><td><span class="score">94.0</span></td><td><span class="score">86.5</span></td><td class="muted">—</td><td><span class="score">72.0</span></td></tr></tbody></table></section>
+ <div class="grid3">
+  <section class="card" style="border:2px solid var(--ok)"><h2>系统推荐 #1 <span class="tag st-ok">94.0</span><span class="sp"></span><span class="vote">专家首选 2</span></h2>
+   <div class="shot" style="border:none"><div class="im"><img src="img/nb2.jpg"></div></div>
+   <p class="small" style="margin-top:6px"><b>Nano Banana · 修订重生成</b></p>
+   <p class="small muted">理由：C5 霞帔结构三位专家均给 2 分；无禁用元素；三位专家中两位结论为“通过”。</p></section>
+  <section class="card"><h2>系统推荐 #2 <span class="tag L2">86.5</span><span class="sp"></span><span class="vote">专家首选 1</span></h2>
+   <div class="shot" style="border:none"><div class="im"><img src="img/sd1.webp"></div></div>
+   <p class="small" style="margin-top:6px"><b>Seedream · 修订重生成</b></p>
+   <p class="small muted">理由：内袍蟒纹与通袖襕、膝襕最接近明代实物；C1 红色仍偏暗。</p></section>
+  <section class="card"><h2>系统推荐 #3 <span class="tag L2">80.0</span></h2>
+   <div class="shot" style="border:none"><div class="im"><img src="img/sd2.webp"></div></div>
+   <p class="small" style="margin-top:6px"><b>Seedream · 生成初稿</b></p><p class="small muted">理由：结构完整；霞帔斜挂已在修订中改正。</p></section>
+ </div>
+ <div class="grid2">
+  <section class="card"><h2>专家推荐与意见</h2>
+   <div style="display:grid;gap:10px;font-size:13px">
+    <div><b>王老师</b> <span class="vote">首选 Nano Banana 修订版</span><div class="muted small">霞帔与内袍分层清楚，可直接定稿。</div></div>
+    <div><b>李老师</b> <span class="vote">首选 Nano Banana 修订版</span> <span class="chip">备选 Seedream 修订版</span><div class="muted small">坠子略大，可接受。</div></div>
+    <div><b>张老师</b> <span class="vote">首选 Seedream 修订版</span> <span class="tag st-need">不同意系统推荐</span><div class="muted small">内袍蟒纹与襕的布局更像明代实物，展示价值更高。</div></div>
+    <label class="f">我的推荐与意见<textarea class="input" style="height:48px" placeholder="写下推荐理由或补充意见"></textarea></label>
+   </div></section>
+  <section class="card"><h2>主审决定</h2>
+   <div class="row"><span class="chip">入选版本：Seedream · 修订重生成</span><span class="tag st-need">与系统 #1 不一致</span></div>
+   <label class="f" style="margin-top:10px">选择理由（必填，写入存证）<textarea class="input" style="height:64px">采纳张老师意见：内袍形制更接近明代实物，用于对外展示；红色偏暗在 V3 修订中调整。</textarea></label>
+   <div class="row" style="margin-top:10px"><button class="btn">并排对比 4 张</button><span class="sp"></span><button class="btn">进入修订 V3</button><button class="btn ok">确定入选，去定稿</button></div></section>
+ </div>
+</main></div>
+</section>
+
+<!-- ============ P07 ============ -->
+<section class="page" id="p07" data-head="proj" data-step="6">
+<div class="wrap"><div data-ref></div><main>
+ <div class="head"><div><h2>⑥ 修订 V2</h2><p>汇集各专家的修订建议，主审逐条采纳或驳回，写入规格书 V2 后修订重生成。</p></div><span class="sp"></span><span class="small muted">9 条建议 · 已采纳 6 · 驳回 1 · 待处理 2</span></div>
+ <section class="card"><h2>修订清单（按字段归并）</h2>
+  <table><thead><tr><th>字段</th><th>建议</th><th>提出人</th><th>来源图</th><th>处理</th></tr></thead><tbody>
+   <tr><td class="mono" rowspan="2">F4</td><td>霞帔为两条带子自颈后经两肩绕到胸前，单条不超过肩宽三分之一，不得做成背心</td><td>王老师</td><td>候选 C</td><td><span class="tag st-ok">已采纳</span></td></tr>
+   <tr><td>霞帔必须居中、左右对称，不可斜挂单肩</td><td>李老师</td><td>候选 B</td><td><span class="tag st-ok">已合并采纳</span></td></tr>
+   <tr><td class="mono">F2</td><td>大衫为鲜亮正红，不得偏暗红或酒红</td><td>张老师</td><td>候选 B</td><td><span class="tag st-ok">已采纳</span></td></tr>
+   <tr style="background:#FFFBF3"><td class="mono">F5</td><td>霞帔纹样以云霞翟纹为主，龙形蟒纹只出现在胸前内袍上</td><td>王老师</td><td>候选 D</td><td><div class="row"><button class="btn sm ok">采纳</button><button class="btn sm">修改后采纳</button><button class="btn sm warn">驳回</button></div></td></tr>
+   <tr><td class="mono">F6</td><td>坠子宽度约为霞帔宽度的三分之一</td><td>李老师</td><td>候选 D</td><td><div class="row"><button class="btn sm ok">采纳</button><button class="btn sm">修改后采纳</button><button class="btn sm warn">驳回</button></div></td></tr>
+   <tr><td class="mono">F9</td><td>腰间白带改为手持白色笏</td><td>张老师</td><td>候选 A</td><td><span class="tag st-doubt">已驳回</span><div class="small muted">原因：画像所见为下垂长带，暂无史料支持</div></td></tr>
+  </tbody></table></section>
+ <div class="grid2">
+  <section class="card"><h2>规格书 V1 → V2 差异</h2>
+   <div class="small" style="display:grid;gap:8px">
+    <div><b class="mono">F4</b> <span class="diff-del">前胸正中垂一条宽带至足前</span> <span class="diff-add">两条带子并排垂于身前正中，下端并合收尖，不得做成背心</span></div>
+    <div><b class="mono">F2</b> 真红，素面无纹 <span class="diff-add">，不偏暗红或酒红</span></div>
+    <div><b class="mono">F7</b> 金地五彩织纹 <span class="diff-add">→ 金地蟒袍：胸前大蟒，通袖襕、膝襕</span></div>
+   </div>
+   <div class="row" style="margin-top:12px"><button class="btn">去 ② 校对并签署 V2</button><span class="sp"></span><button class="btn pri" disabled>修订重生成（V2 签署后可用）</button></div></section>
+  <section class="card"><h2>V1 与 V2 结果对比</h2>
+   <div class="grid2"><figure style="margin:0"><div class="shot"><div class="im"><img src="img/sd2.webp"></div></div><figcaption class="small" style="margin-top:6px"><b>V1 入选</b> · Seedream 80.0</figcaption></figure>
+   <figure style="margin:0"><div class="shot"><div class="im"><img src="img/sd1.webp"></div></div><figcaption class="small" style="margin-top:6px"><b>V2 最佳</b> · Seedream 86.5 <span class="tag st-ok">+6.5</span></figcaption></figure></div>
+   <p class="small muted" style="margin-top:8px">已修正：霞帔斜挂（F4）。仍存在：红色偏暗（F2）。</p></section>
+ </div>
+</main></div>
+</section>
+
+<!-- ============ P08 ============ -->
+<section class="page" id="p08" data-head="proj" data-step="7">
+<div class="wrap"><div data-ref></div><main>
+ <div class="head"><div><h2>⑦ 定稿存证</h2><p>主审签署定稿，系统对定稿图、规格书版本、评审记录和推荐理由计算 SM3 哈希，国博与咪咕两端各留一份。</p></div><span class="sp"></span><span class="pill expert">专家节点 · 签署定稿 · 授权等级</span></div>
+ <section class="card"><div style="display:grid;grid-template-columns:360px minmax(0,1fr);gap:20px;align-items:start">
+  <div class="shot"><div class="im"><img src="img/sd1.webp"></div><div class="meta"><span class="tag st-ok">AI 复原 · AI 生成</span></div></div>
+  <div style="display:grid;gap:12px">
+   <h2 style="font-family:var(--f-display);font-size:22px">明 · 临淮侯夫人命妇礼服复原</h2>
+   <dl class="kv" style="font-size:13.5px"><dt>资产 ID</dt><dd class="mono">YG-2026-B-0001</dd><dt>依据文物</dt><dd>《李言恭配临淮侯夫人史氏像》· 中国国家博物馆藏</dd><dt>定稿版本</dt><dd>规格书 V2 · Seedream 修订重生成 · 正面</dd><dt>评审</dt><dd>3 位专家 · 推荐分 86.5 · 无禁用元素</dd><dt>入选理由</dt><dd>采纳张老师意见：内袍形制更接近明代实物（与系统 #1 不一致，已说明）</dd><dt>签署</dt><dd>王老师（主审）11-24 15:20 ✓ · 李老师（会签）<span class="tag st-need">待会签</span></dd><dt>授权等级</dt><dd><select class="input"><option>可对外展示</option><option>仅内部研究</option><option>可商业授权</option></select></dd></dl>
+   <div><b>存证哈希</b> <span class="small muted">SM3 · 国博节点 / 咪咕节点</span><div class="hash">7f3a9c1e5b7d4e8a9c217d4e5f6a8b9010c2ab88e4f06d1c3b5a7e9d2f4c6b81</div></div>
+   <div class="row"><button class="btn sm">校验哈希</button><span class="tag st-ok">✓ 一致：图像与记录未被改动</span></div>
+   <div class="row"><button class="btn">导出高清图</button><button class="btn">导出复原报告 PDF</button><span class="sp"></span><button class="btn warn">撤销定稿</button></div>
+  </div></div></section>
+ <section class="card"><h2>存证内容清单</h2><table><thead><tr><th>项目</th><th>内容</th><th>摘要</th></tr></thead><tbody>
+  <tr><td>定稿图</td><td>E3_sd_front_1.png · 2048×2732</td><td class="mono">a91c…77e0</td></tr>
+  <tr><td>规格书</td><td>V2（12 字段，签署 11-24 14:02）</td><td class="mono">5b2e…c013</td></tr>
+  <tr><td>评审记录</td><td>3 位专家 × 8 张，含图上标注 21 处</td><td class="mono">e07d…19aa</td></tr>
+  <tr><td>推荐与决定</td><td>系统推荐 Top3、专家首选、主审理由</td><td class="mono">3c44…b8f2</td></tr></tbody></table></section>
+</main></div>
+</section>
+
+<!-- ============ P09 ============ -->
+<section class="page" id="p09" data-head="admin" data-tab="p09">
+<div class="full">
+ <div class="head"><div><h2>合拍模板</h2><p>以专家定稿图为参考，系统生成“虚拟模特穿着复原服饰”的模板；专家审核服装不走样后，运营上线到展厅活动。</p></div><span class="sp"></span><span class="role" style="background:var(--blue-soft);color:var(--blue-ink)">运营视角</span></div>
+ <div style="display:grid;grid-template-columns:340px minmax(0,1fr);gap:16px;align-items:start">
+  <section class="card" style="display:grid;gap:10px"><h2>生成模板</h2>
+   <label class="f">定稿服饰<select><option>YG-2026-B-0001 临淮侯夫人命妇礼服（可对外展示）</option></select></label>
+   <label class="f">虚拟模特<div class="seg"><button class="on">女</button><button>男</button><button>儿童</button></div></label>
+   <label class="f">姿势<div class="seg"><button class="on">站姿正面</button><button>微侧</button><button>坐姿</button></div></label>
+   <label class="f">背景<div class="seg"><button class="on">展厅</button><button>明代室内</button><button>纯色</button></div></label>
+   <p class="small muted">模板要求：脸部正对或微侧、无遮挡；服装完整入画；不含文字。不使用任何真实人物形象。</p>
+   <button class="btn pri">生成 4 张模板</button></section>
+  <section class="card"><h2>模板（6）<span class="sp"></span><div class="seg"><button class="on">全部</button><button>待审核 2</button><button>已通过 3</button><button>已上线 1</button></div></h2>
+   <div class="grid3">
+    <div class="shot"><div class="im fake-img" style="background:linear-gradient(180deg,#EDE6DA,#D8CBB7)"><img src="img/nb2.jpg" style="opacity:.92"><span class="tag st-wait" style="position:absolute;left:8px;top:8px">虚拟模特示意</span></div><div class="meta"><b>展厅 · 站姿正面 #1</b><div class="row"><span class="tag st-ok">已上线</span><span class="small muted">合拍 1,284 次 · 成功率 97%</span></div></div></div>
+    <div class="shot"><div class="im fake-img" style="background:linear-gradient(180deg,#EDE6DA,#D8CBB7)"><img src="img/sd1.webp" style="opacity:.92"><span class="tag st-wait" style="position:absolute;left:8px;top:8px">虚拟模特示意</span></div><div class="meta"><b>展厅 · 微侧 #2</b><div class="row"><span class="tag st-ok">专家通过</span><button class="btn sm">换脸试跑</button><button class="btn sm pri">加入活动</button></div></div></div>
+    <div class="shot"><div class="im fake-img" style="background:linear-gradient(180deg,#EDE6DA,#D8CBB7)"><img src="img/qwen2.webp" style="opacity:.92"><span class="tag st-wait" style="position:absolute;left:8px;top:8px">虚拟模特示意</span><div class="mark" style="left:50%;top:30%"><span>1</span></div></div><div class="meta"><b>明代室内 · 站姿 #3</b><div class="row"><span class="tag st-doubt">专家不通过</span><span class="small muted">王老师：霞帔被袖子遮挡、坠子缺失</span></div></div></div>
+   </div></section>
+ </div>
+ <section class="card"><div style="display:grid;grid-template-columns:minmax(0,1fr) 180px;gap:20px;align-items:center">
+  <div><h2>合拍活动 · 岐阳世泽展厅 <span class="tag st-ok">进行中</span></h2>
+   <div class="grid4" style="margin-top:6px">
+    <div><div class="small muted">起止</div><b>12-01 至 2027-03-01</b></div><div><div class="small muted">每日上限</div><b>3,000 次</b></div><div><div class="small muted">今日合拍</div><b>412 次 · 成功率 96.8%</b></div><div><div class="small muted">平均用时 / 保存率</div><b>21 秒 · 78%</b></div>
+   </div>
+   <div class="row" style="margin-top:10px"><span class="chip">模板：展厅 · 站姿正面 #1</span><span class="chip">生成方式：模板换脸</span><span class="sp"></span><button class="btn sm">抽检结果（不含自拍原图）</button><button class="btn sm warn">下线</button></div></div>
+  <div style="text-align:center"><div style="width:140px;height:140px;margin:0 auto;background:repeating-conic-gradient(#16202B 0 25%,#fff 0 50%) 0 0/20px 20px;border:8px solid #fff;outline:1px solid var(--line)"></div><div class="small muted">展板二维码</div></div>
+ </div></section>
+</div>
+</section>
+
+<!-- ============ P10 ============ -->
+<section class="page" id="p10" data-head="none">
+<div style="background:#EDE7DD;min-height:100vh">
+ <div style="text-align:center;padding:24px 0 0"><h2 style="font-family:var(--f-display);font-size:22px">P10 手机端观众合拍 · 五个关键屏</h2><p class="muted">微信扫码即用，无需登录；人脸只用于本次生成，完成即删。</p></div>
+ <div class="phones">
+  <div><div class="steplabel">1 活动首页</div><div class="phone"><div class="screen"><div class="sbar"><span>9:41</span><span>●●●</span></div><div class="mtitle">衣冠 · 与明代命妇合影</div>
+   <div class="mbody"><div style="height:250px;border-radius:12px;background:url(img/sd1.webp) center 20%/cover"></div>
+    <b style="font-family:var(--f-display);font-size:16px">临淮侯夫人命妇礼服</b><p style="font-size:12px;color:#6B5E4E">依据国博藏《李言恭配临淮侯夫人史氏像》复原：真红大衫、云霞翟纹霞帔、金地蟒袍。</p>
+    <div class="mbtn">我要合拍</div><div class="cap">由国博专家审定 · AI 复原</div></div></div></div></div>
+  <div><div class="steplabel">2 选模板</div><div class="phone"><div class="screen"><div class="sbar"><span>9:41</span><span>●●●</span></div><div class="mtitle">选择合拍模板</div>
+   <div class="mbody"><div style="height:330px;border-radius:12px;background:url(img/nb2.jpg) center 18%/cover;position:relative"><span style="position:absolute;left:8px;top:8px;background:rgba(0,0,0,.55);color:#fff;border-radius:6px;padding:1px 8px;font-size:11px">展厅 · 站姿</span></div>
+    <div style="display:flex;gap:8px;justify-content:center"><span style="width:8px;height:8px;border-radius:50%;background:#A3362A"></span><span style="width:8px;height:8px;border-radius:50%;background:#D6CBB8"></span><span style="width:8px;height:8px;border-radius:50%;background:#D6CBB8"></span></div>
+    <div class="mbtn">用这个模板</div><div class="cap">左右滑动切换 · 共 3 个模板</div></div></div></div></div>
+  <div><div class="steplabel">3 人脸信息授权</div><div class="phone"><div class="screen"><div class="sbar"><span>9:41</span><span>●●●</span></div><div class="mtitle">选择合拍模板</div>
+   <div class="mbody" style="opacity:.35"><div style="height:330px;border-radius:12px;background:url(img/nb2.jpg) center 18%/cover"></div></div>
+   <div style="position:absolute;left:0;right:0;bottom:0;background:#fff;border-radius:20px 20px 0 0;padding:16px;display:grid;gap:8px;font-size:12px">
+    <b style="font-size:14px">使用您的人脸照片前，请确认</b>
+    <div>· 用途：仅用于生成本次合拍照</div><div>· 处理：咪咕合拍服务（已备案）</div><div>· 保存：<b>生成完成后立即删除</b>，不保存人脸特征</div><div>· 未满 14 周岁请由监护人同意</div>
+    <label style="display:flex;gap:6px;align-items:flex-start"><span style="width:16px;height:16px;border:1.5px solid #A3362A;border-radius:4px;flex:none;margin-top:2px"></span>我已阅读并单独同意处理我的人脸信息 <span style="color:#A3362A">《隐私政策》</span></label>
+    <div class="mbtn" style="opacity:.45">同意并拍照</div><div style="text-align:center;color:#6B5E4E">暂不同意，只浏览</div></div></div></div></div>
+  <div><div class="steplabel">4 生成中</div><div class="phone"><div class="screen"><div class="sbar"><span>9:41</span><span>●●●</span></div><div class="mtitle">正在为你换上命妇礼服</div>
+   <div class="mbody" style="justify-items:center;text-align:center"><div style="width:180px;height:180px;border-radius:50%;border:10px solid #EEE3D3;border-top-color:#A3362A;margin-top:30px"></div>
+    <b style="font-size:20px">预计 18 秒</b><div style="background:#F3ECE1;border-radius:12px;padding:12px;font-size:12px;color:#5A4B3A;text-align:left"><b>你知道吗？</b><br>霞帔是明代命妇礼服的标志，两条带子自颈后绕到胸前，末端悬挂金坠。</div>
+    <div class="cap">照片仅用于本次生成，完成后即删除</div></div></div></div></div>
+  <div><div class="steplabel">5 结果</div><div class="phone"><div class="screen"><div class="sbar"><span>9:41</span><span>●●●</span></div><div class="mtitle">我的合拍照</div>
+   <div class="mbody"><div style="height:360px;border-radius:12px;background:url(img/sd1.webp) center 18%/cover;position:relative"><span style="position:absolute;right:8px;bottom:8px;background:rgba(0,0,0,.55);color:#fff;border-radius:6px;padding:1px 8px;font-size:11px">AI 生成 · 衣冠合拍</span><span style="position:absolute;left:8px;top:8px;background:rgba(255,255,255,.85);border-radius:6px;padding:1px 8px;font-size:11px">示意：此处为观众脸部融合效果</span></div>
+    <div class="mbtn">长按图片保存</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><div class="mbtn ghost">重拍</div><div class="mbtn ghost">换模板</div></div><div class="cap">结果链接 24 小时后失效</div></div></div></div></div>
+ </div>
+</div>
+</section>
+
+<!-- ============ P11 ============ -->
+<section class="page" id="p11" data-head="admin" data-tab="p11">
+<div class="full">
+ <div class="head"><div><h2>系统设置</h2><p>技术人员维护成员、模型与白名单；主审维护评审模板与规格书模板。</p></div><span class="sp"></span><span class="role" style="background:var(--blue-soft);color:var(--blue-ink)">技术视角</span></div>
+ <div class="seg"><button>成员与角色</button><button class="on">模型接入</button><button>检索白名单</button><button>评审模板</button><button>规格书模板</button><button>审计日志</button></div>
+ <section class="card" style="padding:0;overflow:hidden"><table><thead><tr><th>模型</th><th>用途</th><th>接口</th><th>密钥</th><th>并发 / 超时</th><th>本月用量</th><th>数据出境</th><th>状态</th><th></th></tr></thead><tbody>
+  <tr><td><b>Nano Banana</b></td><td>复原生成</td><td class="mono">Gemini API</td><td class="mono">••••3fA2</td><td>4 / 120 秒</td><td>1,206 张 · ¥ 2,894</td><td><span class="tag st-need">是</span></td><td><span class="tag st-ok">正常</span></td><td><button class="btn sm">连通测试</button></td></tr>
+  <tr><td><b>Seedream</b></td><td>复原生成</td><td class="mono">火山方舟</td><td class="mono">••••91cd</td><td>4 / 120 秒</td><td>980 张 · ¥ 1,960</td><td><span class="tag st-ok">否</span></td><td><span class="tag st-ok">正常</span></td><td><button class="btn sm">连通测试</button></td></tr>
+  <tr><td><b>GPT Image</b></td><td>复原生成</td><td class="mono">OpenAI API</td><td class="mono">••••0e7b</td><td>2 / 180 秒</td><td>402 张 · ¥ 1,415</td><td><span class="tag st-need">是</span></td><td><span class="tag st-doubt">超时率 8%</span></td><td><button class="btn sm">连通测试</button></td></tr>
+  <tr><td><b>Qwen-Image-Edit-2509</b></td><td>复原生成</td><td class="mono">本地 ComfyUI</td><td class="muted">—</td><td>1 / 600 秒</td><td>214 张 · 本地</td><td><span class="tag st-ok">否</span></td><td><span class="tag st-ok">GPU 空闲 · 队列 0</span></td><td><button class="btn sm">连通测试</button></td></tr>
+  <tr><td><b>人像融合服务</b></td><td>观众合拍</td><td class="mono">已备案第三方</td><td class="mono">••••a4c0</td><td>20 / 30 秒</td><td>12,480 次</td><td><span class="tag st-ok">否</span></td><td><span class="tag st-ok">正常</span></td><td><button class="btn sm">连通测试</button></td></tr>
+  <tr><td><b>视觉读图 / AI 预评</b></td><td>初读、预评</td><td class="mono">视觉大模型 API</td><td class="mono">••••5b19</td><td>4 / 60 秒</td><td>1,733 次</td><td><span class="tag st-need">是</span></td><td><span class="tag st-ok">正常</span></td><td><button class="btn sm">连通测试</button></td></tr>
+ </tbody></table></section>
+ <section class="card"><h2>检索白名单（12 家）<span class="sp"></span><button class="btn sm">＋ 添加博物馆</button></h2>
+  <table><thead><tr><th>博物馆</th><th>级别</th><th>域名</th><th>检索方式</th><th>默认许可</th><th>启用</th></tr></thead><tbody>
+   <tr><td>中国国家博物馆</td><td><span class="tag L1">国家级</span></td><td class="mono">chnmuseum.cn</td><td>网页检索</td><td>仅研究</td><td>✓</td></tr>
+   <tr><td>故宫博物院</td><td><span class="tag L1">国家级</span></td><td class="mono">dpm.org.cn</td><td>网页检索</td><td>仅研究</td><td>✓</td></tr>
+   <tr><td>孔子博物馆</td><td><span class="tag L2">省级及重点馆</span></td><td class="mono">kzbwg.cn</td><td>网页检索</td><td>仅研究</td><td>✓</td></tr>
+   <tr><td>大都会艺术博物馆</td><td><span class="tag L3">海外</span></td><td class="mono">metmuseum.org</td><td>开放接口</td><td>按藏品（CC0 / 受限）</td><td>✓</td></tr>
+  </tbody></table></section>
+</div>
+</section>
+
+<script>
+const STEPS=[["史料汇集",1],["形制规格书",1],["AI 生成",0],["专家评审",1],["对比选择",0],["修订 V2",0],["定稿存证",1]];
+const CROPS=[[120,20,170,195],[110,190,190,190],[150,370,120,250],[30,380,150,180],[250,330,150,230]];
+function fill(){
+  document.querySelectorAll(".page").forEach(p=>{
+    const h=p.dataset.head;
+    if(h==="proj"){p.insertAdjacentHTML("afterbegin",document.getElementById("tpl-proj-head").innerHTML);
+      const cur=+p.dataset.step;
+      p.querySelector("[data-steps]").innerHTML=STEPS.map((s,i)=>{const n=i+1,done=n<cur,on=n===cur,todo=(n===4&&cur!==4);return `<a class="${on?"on":done?"done":todo?"todo":""}"><span class="n">${done?"✓":n}</span>${s[0]}${s[1]?'<span class="ex">专家</span>':""}</a>`}).join("");}
+    if(h==="admin"){p.insertAdjacentHTML("afterbegin",document.getElementById("tpl-admin-head").innerHTML);
+      p.querySelectorAll("[data-tabs] a").forEach(a=>{if(a.dataset.t===p.dataset.tab)a.classList.add("on")});}
+    const r=p.querySelector("[data-ref]"); if(r){r.outerHTML=document.getElementById("tpl-ref").innerHTML;}
+  });
+  document.querySelectorAll("[data-crops]").forEach(c=>{c.innerHTML=CROPS.map(([x,y,w,h])=>{const W=48,s=W/w;return `<div class="crop" style="background-size:${407*s}px ${709*s}px;background-position:${-x*s}px ${-y*s}px"></div>`}).join("")});
+}
+fill();
+function show(){const id=(location.hash||"#p01").slice(1);document.querySelectorAll(".page").forEach(p=>p.classList.toggle("on",p.id===id))}
+addEventListener("hashchange",show);show();
+</script>
+</body>
+</html>
