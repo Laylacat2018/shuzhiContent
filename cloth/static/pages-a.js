@@ -254,6 +254,8 @@ const GeneratePage = {
       runs.value = await api("GET", `/api/projects/${props.pid}/runs`);
       spec.value = await api("GET", `/api/projects/${props.pid}/spec`);
     };
+    const avail = ref([]);
+    onMounted(async () => { avail.value = await api("GET", "/api/models-available"); opt.models = [...avail.value]; });
     onMounted(() => { load(); timer = setInterval(() => { if (jobs.value.some((j) => j.tasks.some((t) => ["queued", "running"].includes(t.status)))) load(); }, 2000); });
     onUnmounted(() => clearInterval(timer));
     const signed = computed(() => spec.value && spec.value.versions.filter((v) => v.status === "signed"));
@@ -275,14 +277,15 @@ const GeneratePage = {
     const shown = computed(() => runs.value.filter((r) => r.stage === filter.value));
     const latest = computed(() => jobs.value[0]);
     const est = computed(() => opt.models.length * opt.per_model);
-    return { jobs, runs, spec, filter, detail, opt, up, hasV1, hasV2, start, retry, upload, shown, latest, est, img, STAGE, VIEW, MODELS, fmtTime, G, go };
+    return { avail, jobs, runs, spec, filter, detail, opt, up, hasV1, hasV2, start, retry, upload, shown, latest, est, img, STAGE, VIEW, MODELS, fmtTime, G, go };
   },
   template: `<main>
    <div class="head"><div><h2>③ AI 生成</h2><p>点“生成”后系统自动调用各模型，结果回到下方画廊；不需要到外部网站复制提示词。</p></div></div>
    <section class="card" style="display:grid;gap:10px"><div class="formrow">
      <label class="f">视角<select v-model="opt.view"><option value="front">正面</option><option value="side">侧面（以入选正面为参考）</option><option value="back">背面（以入选正面为参考）</option></select></label>
      <label class="f">每模型张数<select v-model="opt.per_model"><option>1</option><option>2</option><option>3</option><option>4</option></select></label>
-     <div><div class="small muted">模型</div><div class="chk"><label v-for="(n,k) in MODELS" :key="k"><input type="checkbox" :value="k" v-model="opt.models">{{n}}</label></div></div></div></section>
+     <div><div class="small muted">模型</div><div class="chk"><label v-for="(n,k) in MODELS" :key="k" :style="avail.includes(k)?{}:{opacity:.5}"><input type="checkbox" :value="k" v-model="opt.models" :disabled="!avail.includes(k)">{{n}}{{avail.includes(k)?'':'（未配置）'}}</label></div></div></div>
+    <div class="alert" v-if="!avail.length">还没有可用的模型：请技术人员在“系统设置 → 模型接入”填写密钥。</div></section>
    <div class="grid3">
     <section class="card" :style="hasV1?{borderColor:'var(--ok)'}:{}"><h2>① 生成初稿</h2><p class="small muted">依据规格书 V1，文字 + 主史料参考图，所选模型并行。</p>
      <button class="btn pri w100" style="margin-top:10px" :disabled="!hasV1||!opt.models.length" @click="start('draft')">{{hasV1?('生成 '+est+' 张'):'规格书 V1 签署后可用'}}</button></section>

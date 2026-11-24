@@ -10,8 +10,8 @@ import os
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
-BLOBS = ROOT.parent / "deploy" / "cloth" / "seed" / "blobs"
-PORTRAIT = ROOT.parent / "deploy" / "cloth" / "site" / "shi.jpg"
+BLOBS = ROOT / "sample"
+PORTRAIT = ROOT / "sample" / "shi.jpg"
 RUNS = [("E2_nb2_front_1.jpg", "71d87b1557e1f1f94c2ea73bd7508d97.jpg", "Nano Banana"),
         ("E2_gpt_front_1.webp", "40843a08fe959cf59d69b86bb5f491b0.webp", "GPT Image"),
         ("E2_sd_front_1.webp", "3bab5fed0e6018f9c550a6d6c9f6bf4e.webp", "Seedream"),

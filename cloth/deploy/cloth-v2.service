@@ -1,19 +1,21 @@
-# 衣冠·AI复原工作台 v2。安装见 cloth/README.md
+# 衣冠·AI复原工作台 v2（由 cloth/deploy/install.sh 安装）
 [Unit]
 Description=Cloth restoration workbench v2
 After=network-online.target
 
 [Service]
+User=cloth
+Group=cloth
 WorkingDirectory=/opt/cloth-v2
+EnvironmentFile=/etc/cloth-v2.env
 ExecStart=/opt/cloth-v2/venv/bin/python -m uvicorn cloth.app.main:app --host 127.0.0.1 --port 8791 --proxy-headers
-Environment=CLOTH_DATA=/var/lib/cloth-v2
-DynamicUser=yes
-StateDirectory=cloth-v2
+ReadWritePaths=/var/lib/cloth-v2
 ProtectSystem=strict
 ProtectHome=yes
 PrivateTmp=yes
 NoNewPrivileges=yes
 Restart=on-failure
+RestartSec=5
 
 [Install]
 WantedBy=multi-user.target

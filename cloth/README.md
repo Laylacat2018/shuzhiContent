@@ -39,6 +39,8 @@ python3 -m pytest cloth/tests -q
 
 ## 正式部署（腾讯云主机）
 
+推荐一条命令：`sudo bash cloth/deploy/install.sh --sample`，完整步骤、API 密钥说明和跑通流程见 [deploy/部署与跑通手册.md](deploy/部署与跑通手册.md)。下面是手动步骤。
+
 1. `sudo mkdir -p /opt/cloth-v2 && sudo cp -r cloth /opt/cloth-v2/ && sudo python3 -m venv /opt/cloth-v2/venv && sudo /opt/cloth-v2/venv/bin/pip install -r /opt/cloth-v2/cloth/requirements.txt`
 2. `sudo cp cloth/deploy/cloth-v2.service /etc/systemd/system/ && sudo systemctl daemon-reload && sudo systemctl enable --now cloth-v2`
 3. 首次启动会生成管理员初始密码，保存在 `/var/lib/cloth-v2/admin-initial-password.txt`（权限 600）；登录后在“系统设置 → 成员与角色”添加专家账号。也可设置环境变量 `CLOTH_ADMIN_PASSWORD`。

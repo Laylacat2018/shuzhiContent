@@ -1,0 +1,22 @@
+# 衣冠·AI复原工作台 v2（由 cloth/deploy/install.sh 生成，站点名会被替换为实际域名）
+# 工作台有自己的账号登录；/m/* 与 /api/m* 为观众手机合拍的公开路径。
+__DOMAIN__ {
+    encode zstd gzip
+    header {
+        X-Content-Type-Options nosniff
+        Referrer-Policy same-origin
+        -Server
+    }
+    request_body {
+        max_size 60MB
+    }
+    reverse_proxy 127.0.0.1:8791 {
+        header_up X-Forwarded-Proto {scheme}
+        transport http {
+            response_header_timeout 600s
+        }
+    }
+    handle_errors {
+        respond "衣冠·AI复原工作台暂时不可用，请联系管理员。" 503
+    }
+}

@@ -91,6 +91,18 @@ def create_job(pid: str, body: NewJob, u=Depends(current_user)):
     return job
 
 
+@r.get("/models-available")
+def models_available(u=Depends(current_user)):
+    """可用于生成的模型：已启用，且已配置密钥（本地 ComfyUI 无需密钥；演示模式下全部可用）。"""
+    from .core import model_cfg
+    out = []
+    for code in GEN_MODELS:
+        m = model_cfg(code)
+        if m and m.get("enabled", True) and (m.get("key") or m["kind"] == "comfyui" or DEMO):
+            out.append(code)
+    return out
+
+
 @r.get("/projects/{pid}/jobs")
 def jobs(pid: str, u=Depends(current_user)):
     project_for(pid, u)

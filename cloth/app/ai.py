@@ -123,8 +123,7 @@ class ArkAdapter(Adapter):
 
     def generate(self, prompt, negative, refs, seed):
         self.need_key()
-        body = {"model": self.cfg["model"], "prompt": prompt, "size": "1728x2304", "response_format": "b64_json",
-                "seed": seed, "watermark": False}
+        body = {"model": self.cfg["model"], "prompt": prompt, "size": "1728x2304", "response_format": "b64_json", "watermark": False}
         if refs:
             body["image"] = [data_uri(to_png(r)) for r in refs]
         r = httpx.post(self.cfg["endpoint"].rstrip("/") + "/images/generations", json=body,
