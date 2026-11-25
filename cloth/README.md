@@ -12,7 +12,8 @@
 | `app/routes_spec.py` | P03 规格书：逐字段编辑、证据等级、关联史料、审核状态、批注 @、版本、签署与复核、差异、提示词预览 |
 | `app/routes_flow.py` | P04 生成任务、P05 多专家评审（模板、盲评、标注、汇总分歧、AI 预评）、P06 推荐与决定、P07 修订、P08 定稿存证 |
 | `app/routes_photo.py` | P09 合拍模板与活动、P10 观众合拍接口、P11 模型接入 / 白名单 / 审计 |
-| `app/ai.py` | 模型适配层：Gemini（Nano Banana）、火山方舟（Seedream）、OpenAI（GPT Image）、本地 ComfyUI（Qwen-Image-Edit-2509）、OpenAI 兼容视觉模型；AIGC 标识 |
+| `app/ai.py` | 模型适配层：Gemini（Nano Banana）、火山方舟（Seedream）、阿里云百炼（Qwen-Image 编辑）、火山视觉智能（即梦，AK/SK 签名）、OpenAI（GPT Image）、本地 ComfyUI（Qwen-Image-Edit-2509）、OpenAI 兼容视觉模型；AIGC 标识 |
+| `app/tryon.py` | 观众换装：三种玩法（真换装 / 模板合影 / 本人穿礼服）、规格书驱动的提示词（版本 tryon-v1）、视觉模型自动质检、主备模型切换与降级出图 |
 | `app/museum.py` | 大都会、克利夫兰开放接口检索；白名单藏品页抓取 |
 | `app/worker.py` | 生成任务调度：云端并发，本地 GPU 单独排队，单个模型失败不影响其他 |
 | `static/` | 前端（Vue 3，无构建步骤）；`m.html` 为手机合拍页 |

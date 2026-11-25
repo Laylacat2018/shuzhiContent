@@ -48,9 +48,9 @@ label.ck input{width:18px;height:18px;margin-top:2px;flex:none}
  <section id="s-pick" hidden><div class="slides" id="slides"></div>
   <div class="cap" id="pick-cap"></div><button class="btn" id="use">用这个模板</button><button class="btn ghost" id="back1">返回</button></section>
 
- <section id="s-shot" hidden><h1>拍一张正脸照</h1><p>正对镜头、光线充足、只拍一个人。照片仅用于本次生成，完成后立即删除。</p>
+ <section id="s-shot" hidden><h1 id="shot-h">拍一张正脸照</h1><p id="shot-p">正对镜头、光线充足、只拍一个人。照片仅用于本次生成，完成后立即删除。</p>
   <label class="btn" for="cam">拍照 / 从相册选择</label><input type="file" id="cam" accept="image/*" capture="user" hidden>
-  <div class="err" id="shot-err" hidden></div><button class="btn ghost" id="back2">换模板</button></section>
+  <div class="err" id="shot-err" hidden></div><button class="btn ghost" id="back2">返回</button></section>
 
  <section id="s-wait" hidden><div class="spin"></div><h1 style="text-align:center" id="eta">正在为你换上复原服饰…</h1>
   <div class="tip"><b>你知道吗？</b><br><span id="fact"></span></div><div class="cap">照片仅用于本次生成，完成后即删除</div></section>
@@ -63,7 +63,7 @@ label.ck input{width:18px;height:18px;margin-top:2px;flex:none}
 <div class="sheet" id="consent" hidden><div class="in">
  <b>使用您的人脸照片前，请确认</b>
  <ul style="padding-left:18px;margin:8px 0">
-  <li>用途：仅用于生成本次合拍照</li>
+  <li>用途：仅用于生成本次照片</li>
   <li>处理方：本活动合拍服务（咪咕）</li>
   <li>保存：<b style="font-size:13.5px">生成完成后立即删除</b>，不保存人脸特征，不用于任何训练</li>
   <li>结果图带有“AI 生成”标识，链接 24 小时后失效</li></ul>
@@ -77,7 +77,7 @@ const token = location.pathname.split("/").pop();
 const $ = (id) => document.getElementById(id);
 const FACTS = ["霞帔是明代命妇礼服的标志，两条带子自颈后绕到胸前，末端悬挂金坠。", "命妇礼服的外层大衫多为真红色，对襟、宽袖，袖长过膝。",
   "内袍上的蟒纹与龙纹相似但爪数不同，是明代赐服常见纹样。", "这件复原服饰经国博服饰史专家逐项评审后定稿。"];
-let info = null, tpl = null, consent = false;
+let info = null, tpl = null, consent = false, waitText = "正在为你换上复原服饰…";
 function show(id) { for (const s of ["home", "pick", "shot", "wait", "done"]) $("s-" + s).hidden = s !== id; window.scrollTo(0, 0); }
 const fileUrl = (fid) => `/api/m-file/${token}/${fid}`;
 
@@ -91,22 +91,30 @@ async function init() {
     $("pname").textContent = d.project || "复原服饰";
     $("pdesc").textContent = d.artifact ? `依据${d.artifact}复原，经专家审定。` : "经专家审定的复原服饰。";
     if (d.final_file) $("hero").src = fileUrl(d.final_file);
-    if (!d.templates.length) throw new Error("暂无可用模板");
-    if (d.full) throw new Error("今日合拍次数已满，欢迎明天再来");
+    if (!d.available) throw new Error(d.mode === "swap" ? "暂无可用模板" : "活动服饰暂不可用");
+    if (d.full) throw new Error("今日次数已满，欢迎明天再来");
+    const TXT = { tryon: ["我要试穿", "拍一张全身或半身照", "站直、全身或半身入镜、只拍一个人，背景和姿势会保留。照片仅用于本次生成，完成后立即删除。", "正在为你换上复原服饰…"],
+      portrait: ["生成我的古装照", "拍一张正脸照", "正对镜头、光线充足、只拍一个人。照片仅用于本次生成，完成后立即删除。", "正在为你生成古装照…"],
+      swap: ["我要合拍", "拍一张正脸照", "正对镜头、光线充足、只拍一个人。照片仅用于本次生成，完成后立即删除。", "正在为你换上复原服饰…"] }[d.mode] || [];
+    [$("go").textContent, $("shot-h").textContent, $("shot-p").textContent, waitText] = TXT;
+    $("switch").hidden = d.mode !== "swap";
+    if (d.mode !== "swap") { $("back2").textContent = "返回"; return; }
+    $("back2").textContent = "换模板";
     $("slides").innerHTML = d.templates.map((t, i) => `<img data-id="${t.id}" class="${i === 0 ? "on" : ""}" src="${fileUrl(t.file_id)}" alt="${t.bg} ${t.pose}">`).join("");
     tpl = d.templates[0].id;
     $("pick-cap").textContent = `左右滑动切换 · 共 ${d.templates.length} 个模板`;
   } catch (e) { $("home-err").textContent = e.message; $("home-err").hidden = false; $("go").disabled = true; }
 }
 $("slides").addEventListener("click", (e) => { if (e.target.dataset.id) { tpl = e.target.dataset.id; document.querySelectorAll("#slides img").forEach((x) => x.classList.toggle("on", x === e.target)); } });
-$("go").onclick = () => show("pick");
+const toShot = () => { if (consent) show("shot"); else $("consent").hidden = false; };
+$("go").onclick = () => (info && info.mode !== "swap" ? toShot() : show("pick"));
 $("back1").onclick = () => show("home");
-$("use").onclick = () => { if (consent) show("shot"); else $("consent").hidden = false; };
+$("use").onclick = toShot;
 const syncOk = () => { $("g-row").hidden = !$("minor").checked; $("ok").disabled = !$("agree").checked || ($("minor").checked && !$("guardian").checked); };
 ["agree", "minor", "guardian"].forEach((id) => ($(id).onchange = syncOk));
 $("ok").onclick = () => { consent = true; $("consent").hidden = true; show("shot"); };
 $("no").onclick = () => { $("consent").hidden = true; show("home"); };
-$("back2").onclick = () => show("pick");
+$("back2").onclick = () => show(info && info.mode !== "swap" ? "home" : "pick");
 $("again").onclick = () => show("shot");
 $("switch").onclick = () => show("pick");
 
@@ -125,11 +133,13 @@ $("cam").onchange = async (e) => {
   $("shot-err").hidden = true;
   show("wait");
   $("fact").textContent = FACTS[Math.floor(Math.random() * FACTS.length)];
-  const t0 = Date.now(), tick = setInterval(() => ($("eta").textContent = `正在生成… ${Math.round((Date.now() - t0) / 1000)} 秒`), 1000);
+  $("eta").textContent = waitText;
+  const t0 = Date.now(), tick = setInterval(() => ($("eta").textContent = `${waitText.replace("…", "")}… ${Math.round((Date.now() - t0) / 1000)} 秒`), 1000);
   try {
     const fd = new FormData();
     fd.append("photo", await shrink(f), "me.jpg");
-    fd.append("template_id", tpl); fd.append("consent", "true");
+    if (info.mode === "swap") fd.append("template_id", tpl);
+    fd.append("consent", "true");
     fd.append("minor", $("minor").checked ? "true" : "false"); fd.append("guardian", $("guardian").checked ? "true" : "false");
     const r = await fetch(`/api/m/${token}/photo`, { method: "POST", body: fd });
     const d = await r.json();

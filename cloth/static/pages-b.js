@@ -275,21 +275,36 @@ const FinalPage = {
 /* ------------------------------------------------------------ P09 */
 const TemplatesPage = {
   setup() {
-    const finals = ref([]), list = ref([]), acts = ref([]), filter = ref("all"), trialImg = ref(null), samples = ref(null);
+    const finals = ref([]), list = ref([]), acts = ref([]), filter = ref("all"), trialImg = ref(null), trialInfo = ref(null), samples = ref(null);
+    const tt = reactive({ mode: "tryon", final_id: "", scene: "", busy: false });
+    const MODES = { tryon: "真换装（保留观众姿势和背景）", swap: "模板合影（换脸进审定模板）", portrait: "本人穿礼服（自拍生成古装照）" };
     const gen = reactive({ final_id: "", gender: "女", pose: "站姿正面", bg: "展厅", count: 4 });
-    const act = reactive({ show: false, name: "", hall: "", start: new Date().toISOString().slice(0, 10), end: "", daily_limit: 3000, template_ids: [], mode: "swap" });
+    const act = reactive({ show: false, name: "", hall: "", start: new Date().toISOString().slice(0, 10), end: "", daily_limit: 3000, template_ids: [], mode: "tryon", final_id: "", scene: "" });
     let timer;
     const load = async () => {
       finals.value = await api("GET", "/api/finals-shareable");
       list.value = await api("GET", "/api/templates");
       acts.value = await api("GET", "/api/activities");
       if (!gen.final_id && finals.value[0]) gen.final_id = finals.value[0].id;
+      if (!tt.final_id && finals.value[0]) tt.final_id = finals.value[0].id;
+      if (!act.final_id && finals.value[0]) act.final_id = finals.value[0].id;
     };
     onMounted(() => { load(); timer = setInterval(() => { if (list.value.some((t) => t.status === "generating")) load(); }, 2000); });
     onUnmounted(() => clearInterval(timer));
     const generate = async () => { await call(() => api("POST", "/api/templates", gen), "模板生成中"); load(); };
     const review = async (t, ok) => { const reason = ok ? "" : prompt("不通过原因（必填）"); if (!ok && !reason) return; await call(() => api("POST", `/api/templates/${t.id}/review`, { ok, reason }), "已审核"); load(); };
-    const trial = async (t, files) => { const fd = new FormData(); fd.append("photo", files[0]); const r = await fetch(`/api/templates/${t.id}/trial`, { method: "POST", body: fd, credentials: "same-origin" }); if (!r.ok) return toast((await r.json()).message, true); trialImg.value = URL.createObjectURL(await r.blob()); };
+    const showTrial = async (r) => {
+      if (!r.ok) { toast((await r.json()).message, true); return; }
+      const h = r.headers.get("X-Tryon-Info"); trialInfo.value = h ? JSON.parse(decodeURIComponent(h)) : null;
+      trialImg.value = URL.createObjectURL(await r.blob());
+    };
+    const trial = async (t, files) => { const fd = new FormData(); fd.append("photo", files[0]); toast("试跑中，约 30–90 秒…"); await showTrial(await fetch(`/api/templates/${t.id}/trial`, { method: "POST", body: fd, credentials: "same-origin" })); };
+    const tryonTrial = async (files) => {
+      if (!files[0]) return; tt.busy = true;
+      try { const fd = new FormData(); fd.append("photo", files[0]); fd.append("mode", tt.mode); fd.append("final_id", tt.final_id); fd.append("scene", tt.scene);
+        await showTrial(await fetch(`/api/tryon/trial`, { method: "POST", body: fd, credentials: "same-origin" })); } finally { tt.busy = false; }
+    };
+    const actOk = computed(() => act.name && act.end && (act.mode === "swap" ? act.template_ids.length : act.final_id));
     const createAct = async () => { await call(() => api("POST", "/api/activities", act), "活动已上线"); act.show = false; load(); };
     const toggle = async (a) => { await call(() => api("PATCH", `/api/activities/${a.id}`, { status: a.status === "online" ? "offline" : "online" })); load(); };
     const showSamples = async (a) => { samples.value = await call(() => api("GET", `/api/activities/${a.id}/samples`)); };
@@ -297,10 +312,16 @@ const TemplatesPage = {
     const STATUS = { generating: ["生成中", "L2"], pending: ["待审核", "st-wait"], approved: ["专家通过", "st-ok"], rejected: ["专家不通过", "st-doubt"], online: ["已上线", "st-ok"], offline: ["已下线", "st-wait"], failed: ["生成失败", "st-doubt"] };
     const isOps = computed(() => ["ops", "tech"].includes(G.me.role)), isExpert = computed(() => ["expert", "lead"].includes(G.me.role));
     const mlink = (a) => location.origin + "/m/" + a.token;
-    return { finals, list, acts, filter, trialImg, samples, gen, act, generate, review, trial, createAct, toggle, showSamples, shown, STATUS, isOps, isExpert, mlink, img, fmtTime, G };
+    return { finals, list, acts, filter, trialImg, trialInfo, samples, gen, act, tt, MODES, actOk, generate, review, trial, tryonTrial, createAct, toggle, showSamples, shown, STATUS, isOps, isExpert, mlink, img, fmtTime, G };
   },
   template: `<div class="full">
-   <div class="head"><div><h2>合拍模板</h2><p>以专家定稿图为参考，系统生成“虚拟模特穿着复原服饰”的模板；专家审核服装不走样后，运营上线到展厅活动。</p></div></div>
+   <div class="head"><div><h2>观众换装与合拍</h2><p>三种玩法：真换装（观众自己的照片穿上复原服饰）、模板合影（换脸进专家审定的模板）、本人穿礼服（自拍生成古装照）。提示词由定稿所依据的规格书自动生成，出图后自动质检，不合格自动重试或切换备用模型。</p></div></div>
+   <section class="card" v-if="isOps&&finals.length"><h2>换装试跑 <span class="small muted">上线前用测试照片检查效果</span></h2>
+    <div class="formrow"><label class="f">定稿服饰<select v-model="tt.final_id"><option v-for="f in finals" :key="f.id" :value="f.id">{{f.asset_no}} {{f.project}}</option></select></label>
+     <label class="f">玩法<select v-model="tt.mode"><option value="tryon">{{MODES.tryon}}</option><option value="portrait">{{MODES.portrait}}</option></select></label>
+     <label class="f" v-if="tt.mode==='portrait'">场景<input v-model="tt.scene" placeholder="江南园林的月洞门前，身旁有梅花与竹子"></label>
+     <label class="btn pri" :class="{disabled:tt.busy}">{{tt.busy?'生成中…':'上传测试照片并试跑'}}<input type="file" accept="image/*" hidden :disabled="tt.busy" @change="tryonTrial($event.target.files)"></label></div>
+    <p class="small muted">真换装请用全身或半身照；本人穿礼服请用正脸照。试跑结果带“试跑”水印，并显示所用模型、质检分和每次尝试。</p></section>
    <div style="display:grid;grid-template-columns:320px minmax(0,1fr);gap:16px;align-items:start">
     <section class="card" style="display:grid;gap:10px" v-if="isOps"><h2>生成模板</h2>
      <div class="empty" v-if="!finals.length">没有可用的定稿：只有授权为“可对外展示”及以上、且已生效的定稿可以生成模板。</div>
@@ -321,17 +342,24 @@ const TemplatesPage = {
    <section class="card"><h2>合拍活动 <span class="sp"></span><button class="btn pri" v-if="G.me.role==='ops'" @click="act.show=true">＋ 新建活动</button></h2>
     <div class="empty" v-if="!acts.length">还没有活动</div>
     <div v-for="a in acts" :key="a.id" style="display:grid;grid-template-columns:minmax(0,1fr) 170px;gap:16px;align-items:center;padding:10px 0;border-top:1px solid var(--line)">
-     <div><h3>{{a.name}} <span class="tag" :class="a.status==='online'?'st-ok':'st-wait'">{{a.status==='online'?'进行中':'已下线'}}</span></h3>
+     <div><h3>{{a.name}} <span class="tag L2">{{a.mode_name||'模板合影'}}</span> <span class="tag" :class="a.status==='online'?'st-ok':'st-wait'">{{a.status==='online'?'进行中':'已下线'}}</span></h3>
       <div class="grid4"><div><div class="small muted">起止</div><b>{{a.start}} 至 {{a.end}}</b></div><div><div class="small muted">每日上限</div><b>{{a.daily_limit}} 次</b></div><div><div class="small muted">今日 / 累计</div><b>{{a.today}} / {{a.total}} 次 · 成功率 {{a.success??'—'}}%</b></div><div><div class="small muted">平均用时 / 保存率</div><b>{{a.avg_seconds??'—'}} 秒 · {{a.saved??'—'}}%</b></div></div>
+      <div class="small muted" style="margin-top:4px">平均质检分 {{a.avg_qc??'—'}} · 降级出图 {{a.degraded||0}} 张 · 累计成本 ¥{{a.cost||0}}<span v-if="a.models&&Object.keys(a.models).length"> · 出图模型：{{Object.entries(a.models).map(([k,v])=>k+' '+v).join('，')}}</span></div>
       <div class="row" style="margin-top:8px"><a class="small" :href="mlink(a)" target="_blank">{{mlink(a)}}</a><span class="sp"></span><button class="btn sm" @click="showSamples(a)">抽检结果（不含自拍原图）</button><button class="btn sm" :class="a.status==='online'?'warn':''" v-if="G.me.role==='ops'" @click="toggle(a)">{{a.status==='online'?'下线':'重新上线'}}</button></div></div>
      <div style="text-align:center"><img :src="'/api/activities/'+a.id+'/qr.svg'" style="width:150px"><div class="small muted">展板二维码</div></div></div></section>
    <div class="modal-bg" v-if="act.show" @click.self="act.show=false"><div class="modal"><h2>新建合拍活动</h2>
     <div class="grid2"><label class="f">活动名称<input v-model="act.name"></label><label class="f">展厅<input v-model="act.hall"></label><label class="f">开始日期<input type="date" v-model="act.start"></label><label class="f">结束日期<input type="date" v-model="act.end"></label>
-     <label class="f">每日上限<input type="number" v-model.number="act.daily_limit"></label><label class="f">生成方式<select v-model="act.mode"><option value="swap">模板换脸</option><option value="edit">多图编辑</option></select></label></div>
-    <div class="small muted">选择已通过审核的模板</div><div class="row"><label v-for="t in list.filter(t=>['approved','online'].includes(t.status))" :key="t.id" style="width:90px" class="small"><img :src="img(t.file_id)" style="width:100%;aspect-ratio:3/4;object-fit:cover;border-radius:6px"><input type="checkbox" :value="t.id" v-model="act.template_ids">{{t.pose}}</label></div>
-    <div class="row"><span class="sp"></span><button class="btn" @click="act.show=false">取消</button><button class="btn pri" :disabled="!act.name||!act.end||!act.template_ids.length" @click="createAct">上线</button></div></div></div>
-   <div class="modal-bg" v-if="trialImg" @click.self="trialImg=null"><div class="modal"><h2>换脸试跑结果</h2><img :src="trialImg" style="max-height:70vh;object-fit:contain"><div class="row"><span class="sp"></span><button class="btn" @click="trialImg=null">关闭</button></div></div></div>
-   <div class="modal-bg" v-if="samples" @click.self="samples=null"><div class="modal"><h2>抽检合拍结果（最近 24 张）</h2><div class="grid4"><img v-for="s in samples" :key="s.id" :src="img(s.result)" style="width:100%;border-radius:6px"></div><div class="empty" v-if="!samples.length">暂无</div><div class="row"><span class="sp"></span><button class="btn" @click="samples=null">关闭</button></div></div></div>
+     <label class="f">每日上限<input type="number" v-model.number="act.daily_limit"></label><label class="f">玩法<select v-model="act.mode"><option v-for="(n,k) in MODES" :key="k" :value="k">{{n}}</option></select></label></div>
+    <template v-if="act.mode==='swap'"><div class="small muted">选择已通过审核的模板</div><div class="row"><label v-for="t in list.filter(t=>['approved','online'].includes(t.status))" :key="t.id" style="width:90px" class="small"><img :src="img(t.file_id)" style="width:100%;aspect-ratio:3/4;object-fit:cover;border-radius:6px"><input type="checkbox" :value="t.id" v-model="act.template_ids">{{t.pose}}</label></div></template>
+    <template v-else><label class="f">定稿服饰<select v-model="act.final_id"><option v-for="f in finals" :key="f.id" :value="f.id">{{f.asset_no}} {{f.project}}（{{f.license}}）</option></select></label>
+     <label class="f" v-if="act.mode==='portrait'">场景<input v-model="act.scene" placeholder="江南园林的月洞门前，身旁有梅花与竹子（避免宫殿、城楼）"></label></template>
+    <div class="row"><span class="sp"></span><button class="btn" @click="act.show=false">取消</button><button class="btn pri" :disabled="!actOk" @click="createAct">上线</button></div></div></div>
+   <div class="modal-bg" v-if="trialImg" @click.self="trialImg=null"><div class="modal"><h2>试跑结果</h2><img :src="trialImg" style="max-height:62vh;object-fit:contain">
+    <div class="small" v-if="trialInfo"><b>{{trialInfo.model_name}}</b> · 质检 {{trialInfo.qc_score??'未质检'}} 分<span v-if="trialInfo.degraded" style="color:var(--bad)">（未达标，降级出图）</span> · 用时 {{trialInfo.seconds}} 秒 · 提示词 {{trialInfo.prompt_version}}
+     <div class="muted" v-if="trialInfo.qc_failed&&trialInfo.qc_failed.length">不符合项：{{trialInfo.qc_failed.join('；')}}</div>
+     <div class="muted">尝试：{{trialInfo.attempts.map(a=>a.model+'#'+a.try+' '+(a.error?('失败 '+a.error):((a.seconds||0)+'秒 质检'+(a.qc??'—')))).join(' → ')}}</div></div>
+    <div class="row"><span class="sp"></span><button class="btn" @click="trialImg=null;trialInfo=null">关闭</button></div></div></div>
+   <div class="modal-bg" v-if="samples" @click.self="samples=null"><div class="modal"><h2>抽检合拍结果（最近 24 张）</h2><div class="grid4"><figure v-for="s in samples" :key="s.id" style="margin:0"><img :src="img(s.result)" style="width:100%;border-radius:6px"><figcaption class="small muted">{{s.model||''}} · 质检 {{s.qc??'—'}}<span v-if="s.degraded" style="color:var(--bad)"> 降级</span></figcaption></figure></div><div class="empty" v-if="!samples.length">暂无</div><div class="row"><span class="sp"></span><button class="btn" @click="samples=null">关闭</button></div></div></div>
   </div>`,
 };
 
@@ -339,10 +367,11 @@ const TemplatesPage = {
 const SettingsPage = {
   setup() {
     const tab = ref(G.me.role === "tech" ? "models" : "audit"), users = ref([]), models = ref([]), wl = ref([]), tpls = ref([]), logs = ref([]), test = reactive({});
+    const pol = ref(null);
     const nu = reactive({ username: "", name: "", role: "expert", password: "", org: "" }), keys = reactive({}), nw = reactive({ name: "", level: "省级及重点馆", domain: "", method: "网页", license: "仅研究" });
     const load = async () => {
       users.value = await api("GET", "/api/users");
-      if (["tech", "ops"].includes(G.me.role)) models.value = await api("GET", "/api/settings/models");
+      if (["tech", "ops"].includes(G.me.role)) { models.value = await api("GET", "/api/settings/models"); pol.value = await api("GET", "/api/settings/tryon-policy"); }
       wl.value = await api("GET", "/api/settings/whitelist");
       tpls.value = await api("GET", "/api/review-templates");
       if (["tech", "lead", "ops"].includes(G.me.role)) logs.value = await api("GET", "/api/settings/audit");
@@ -352,16 +381,18 @@ const SettingsPage = {
     const addUser = async () => { await call(() => api("POST", "/api/users", nu), "已添加成员"); Object.assign(nu, { username: "", name: "", password: "" }); load(); G.users = await api("GET", "/api/users"); };
     const patchUser = async (u, ch) => { await call(() => api("PATCH", `/api/users/${u.id}`, ch), "已更新"); load(); };
     const resetPw = async (u) => { const pw = prompt("新密码（至少 8 位）"); if (pw) patchUser(u, { password: pw }); };
-    const saveModel = async (m) => { const body = { enabled: m.enabled, endpoint: m.endpoint, model: m.model, concurrency: +m.concurrency, timeout: +m.timeout, cross_border: m.cross_border }; if (keys[m.id]) body.key = keys[m.id]; await call(() => api("PATCH", `/api/settings/models/${m.id}`, body), "已保存"); keys[m.id] = ""; load(); };
+    const savePol = async () => { const p = pol.value.policy; await call(() => api("PUT", "/api/settings/tryon-policy", { tryon_chain: p.tryon_chain.filter(Boolean), swap_chain: p.swap_chain.filter(Boolean), portrait_chain: p.portrait_chain.filter(Boolean), template_model: p.template_model, qc: p.qc, qc_pass: +p.qc_pass, qc_floor: +p.qc_floor, tries_per_model: +p.tries_per_model, deadline: +p.deadline }), "换装策略已保存"); load(); };
+    const saveModel = async (m) => { const body = { enabled: m.enabled, endpoint: m.endpoint, model: m.model, concurrency: +m.concurrency, timeout: +m.timeout, cross_border: m.cross_border, price: m.price === "" || m.price == null ? null : +m.price }; if (keys[m.id]) body.key = keys[m.id]; await call(() => api("PATCH", `/api/settings/models/${m.id}`, body), "已保存"); keys[m.id] = ""; load(); };
     const testModel = async (m) => { test[m.id] = { message: "测试中…" }; test[m.id] = await api("POST", `/api/settings/models/${m.id}/test`); };
     const addWl = async () => { await call(() => api("POST", "/api/settings/whitelist", nw), "已添加"); Object.assign(nw, { name: "", domain: "" }); load(); };
     const toggleWl = async (w) => { await call(() => api("PATCH", `/api/settings/whitelist/${w.id}`, { name: w.name, level: w.level, domain: w.domain, method: w.method, license: w.license, enabled: !w.enabled })); load(); };
     const ROLES = { expert: "评审专家", lead: "主审专家", ops: "咪咕运营", tech: "咪咕技术" };
-    return { tab, users, models, wl, tpls, logs, test, nu, keys, nw, isTech, addUser, patchUser, resetPw, saveModel, testModel, addWl, toggleWl, ROLES, fmtTime, G };
+    const PURPOSE = { generate: "复原生成", vision: "读图 / 预评", fusion: "换装策略入口", tryon: "观众换装", qc: "换装质检" };
+    return { tab, users, models, wl, tpls, logs, test, nu, keys, nw, pol, isTech, addUser, patchUser, resetPw, saveModel, savePol, testModel, addWl, toggleWl, ROLES, PURPOSE, fmtTime, G };
   },
   template: `<div class="full">
    <div class="head"><div><h2>系统设置</h2><p>技术人员维护成员、模型与白名单；主审维护评审模板（在专家评审页）。所有修改进入审计日志。</p></div></div>
-   <div class="seg"><button v-for="(n,k) in {members:'成员与角色',models:'模型接入',whitelist:'检索白名单',templates:'评审模板',audit:'审计日志'}" :key="k" v-show="k!=='models'||['tech','ops'].includes(G.me.role)" :class="{on:tab===k}" @click="tab=k">{{n}}</button></div>
+   <div class="seg"><button v-for="(n,k) in {members:'成员与角色',models:'模型接入',policy:'换装策略',whitelist:'检索白名单',templates:'评审模板',audit:'审计日志'}" :key="k" v-show="!['models','policy'].includes(k)||['tech','ops'].includes(G.me.role)" :class="{on:tab===k}" @click="tab=k">{{n}}</button></div>
    <section class="card" v-if="tab==='members'"><table><thead><tr><th>姓名</th><th>账号</th><th>单位</th><th>角色</th><th>状态</th><th v-if="isTech"></th></tr></thead><tbody>
     <tr v-for="u in users" :key="u.id"><td><b>{{u.name}}</b></td><td class="mono">{{u.username}}</td><td>{{u.org}}</td>
      <td><select v-if="isTech" class="input" :value="u.role" @change="patchUser(u,{role:$event.target.value})"><option v-for="(n,k) in ROLES" :value="k">{{n}}</option></select><span v-else>{{u.role_name}}</span></td>
@@ -369,14 +400,26 @@ const SettingsPage = {
      <td v-if="isTech"><button class="btn sm" @click="patchUser(u,{active:!u.active})">{{u.active?'停用':'启用'}}</button> <button class="btn sm" @click="resetPw(u)">重置密码</button></td></tr></tbody></table>
     <div class="formrow" style="margin-top:12px" v-if="isTech"><input class="input" v-model="nu.name" placeholder="姓名"><input class="input" v-model="nu.username" placeholder="登录账号"><input class="input" v-model="nu.org" placeholder="单位">
      <select class="input" v-model="nu.role"><option v-for="(n,k) in ROLES" :value="k">{{n}}</option></select><input class="input" type="password" v-model="nu.password" placeholder="初始密码（≥8 位）"><button class="btn pri" :disabled="!nu.name||!nu.username||nu.password.length<8" @click="addUser">邀请成员</button></div></section>
-   <section class="card" style="padding:0;overflow:auto" v-if="tab==='models'"><table><thead><tr><th>模型</th><th>接口</th><th>模型名</th><th>密钥</th><th>并发 / 超时</th><th>用量</th><th>出境</th><th>启用</th><th></th></tr></thead><tbody>
-    <tr v-for="m in models" :key="m.id"><td><b>{{m.name}}</b><div class="small muted">{{({generate:'复原生成',vision:'读图 / 预评',fusion:'观众合拍'})[m.purpose]}}</div></td>
+   <section class="card" style="padding:0;overflow:auto" v-if="tab==='models'"><table><thead><tr><th>模型</th><th>接口</th><th>模型名</th><th>密钥</th><th>并发 / 超时</th><th>单价（元/张）</th><th>用量</th><th>出境</th><th>启用</th><th></th></tr></thead><tbody>
+    <tr v-for="m in models" :key="m.id"><td><b>{{m.name}}</b><div class="small muted">{{PURPOSE[m.purpose]||m.purpose}} · <span class="mono">{{m.code}}</span></div></td>
      <td><input class="input" v-model="m.endpoint" :disabled="!isTech" style="width:220px"></td><td><input class="input" v-model="m.model" :disabled="!isTech" style="width:200px"></td>
      <td><span class="mono">{{m.key_tail||'未配置'}}</span><input v-if="isTech&&m.kind!=='comfyui'&&m.kind!=='edit_model'" class="input" type="password" v-model="keys[m.id]" placeholder="填写新密钥" style="width:140px"></td>
-     <td><input class="input" style="width:50px" v-model="m.concurrency" :disabled="!isTech"> / <input class="input" style="width:60px" v-model="m.timeout" :disabled="!isTech"> 秒</td><td>{{m.used||0}}</td>
+     <td><input class="input" style="width:50px" v-model="m.concurrency" :disabled="!isTech"> / <input class="input" style="width:60px" v-model="m.timeout" :disabled="!isTech"> 秒</td><td><input class="input" style="width:64px" v-model="m.price" :disabled="!isTech" placeholder="—"></td><td>{{m.used||0}}</td>
      <td><input type="checkbox" v-model="m.cross_border" :disabled="!isTech"></td><td><input type="checkbox" v-model="m.enabled" :disabled="!isTech"></td>
      <td v-if="isTech"><button class="btn sm pri" @click="saveModel(m)">保存</button> <button class="btn sm" @click="testModel(m)">连通测试</button><div class="small" v-if="test[m.id]" :style="{color:test[m.id].ok===false?'var(--bad)':'var(--ok)'}">{{test[m.id].message}}</div></td></tr></tbody></table>
-    <p class="small muted" style="padding:10px 14px">密钥加密保存，页面与接口只显示后 4 位。“观众合拍”的模型名填写用于合拍的生成模型编号（nb2 / sd / gpt）。</p></section>
+    <p class="small muted" style="padding:10px 14px">密钥加密保存，页面与接口只显示后 4 位。火山方舟、阿里云百炼填 API Key；即梦（火山视觉智能）填 “AccessKeyID:SecretAccessKey”。单价按账单填写，用于活动成本统计。</p></section>
+   <section class="card" v-if="tab==='policy'&&pol"><h2>换装策略 <span class="small muted">提示词版本 {{pol.prompt_version}}</span></h2>
+    <p class="small muted">每种玩法按顺序尝试模型：接口出错立即换下一个；质检不合格先换种子重试，仍不合格换下一个；全部不合格时，最好一张达到“兜底分”才返回，否则提示观众稍后再试。</p>
+    <table><thead><tr><th>玩法</th><th>首选</th><th>备用 1</th><th>备用 2</th></tr></thead><tbody>
+     <tr v-for="k in ['tryon','swap','portrait']" :key="k"><td><b>{{pol.modes[k]}}</b></td>
+      <td v-for="i in 3" :key="i"><select class="input" v-model="pol.policy[k+'_chain'][i-1]" :disabled="!isTech"><option :value="undefined">—</option><option v-for="m in pol.models" :key="m.code" :value="m.code">{{m.name}}{{m.has_key?'':'（未配置密钥）'}}{{m.enabled?'':'（已停用）'}}</option></select></td></tr></tbody></table>
+    <div class="formrow" style="margin-top:10px"><label class="f">模板生成模型<select v-model="pol.policy.template_model" :disabled="!isTech"><option v-for="m in pol.models" :key="m.code" :value="m.code">{{m.name}}</option></select></label>
+     <label class="chip"><input type="checkbox" v-model="pol.policy.qc" :disabled="!isTech"> 出图自动质检</label>
+     <label class="f">合格分<input class="input" type="number" style="width:70px" v-model="pol.policy.qc_pass" :disabled="!isTech"></label>
+     <label class="f">兜底分<input class="input" type="number" style="width:70px" v-model="pol.policy.qc_floor" :disabled="!isTech"></label>
+     <label class="f">每模型尝试次数<input class="input" type="number" style="width:60px" v-model="pol.policy.tries_per_model" :disabled="!isTech"></label>
+     <label class="f">单次总时长上限（秒）<input class="input" type="number" style="width:70px" v-model="pol.policy.deadline" :disabled="!isTech"></label>
+     <button class="btn pri" v-if="isTech" @click="savePol">保存策略</button></div></section>
    <section class="card" v-if="tab==='whitelist'"><table><thead><tr><th>博物馆</th><th>级别</th><th>域名</th><th>检索方式</th><th>默认许可</th><th>启用</th></tr></thead><tbody>
     <tr v-for="w in wl" :key="w.id"><td>{{w.name}}</td><td><span class="tag" :class="w.level==='国家级'?'L1':w.level==='海外'?'L3':'L2'">{{w.level}}</span></td><td class="mono">{{w.domain}}</td><td>{{w.method}}</td><td>{{w.license}}</td>
      <td><button class="btn sm" :disabled="!isTech" @click="toggleWl(w)">{{w.enabled?'✓ 启用':'已停用'}}</button></td></tr></tbody></table>

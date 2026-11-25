@@ -12,6 +12,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel
 
 from . import ai, defaults, worker
+from . import tryon as tryon_mod
 from .core import (DEMO, audit, current_user, dec, delete_file, enc, file_bytes, model_cfg, project_for, require, save_file, store)
 
 r = APIRouter(prefix="/api")
@@ -107,13 +108,44 @@ async def trial(tid: str, photo: UploadFile = File(...), u=Depends(require("ops"
         raise HTTPException(400, "模板尚未生成")
     selfie = await photo.read()
     try:
-        img = worker.fusion_generate(selfie, file_bytes(t["file_id"]), "edit")
+        _, fields = worker.final_context(store.get("finals", t["final_id"]))
+        img, info = worker.tryon_generate("swap", selfie, None, file_bytes(t["file_id"]), fields)
     except ai.ModelError as e:
         raise HTTPException(503, str(e))
     finally:
         del selfie
     out = ai.watermark(img, "AI 生成 · 试跑", {"label": "AI 生成", "trial": True})
-    return Response(out, media_type="image/png")
+    return Response(out, media_type="image/png", headers=_info_headers(info))
+
+
+def _info_headers(info: dict) -> dict:
+    import json as _j
+    from urllib.parse import quote
+    brief = {k: info.get(k) for k in ("mode", "model", "model_name", "qc_score", "qc_failed", "degraded", "seconds", "cost", "prompt_version")}
+    brief["attempts"] = [{k: a.get(k) for k in ("model", "try", "seconds", "error")} | {"qc": (a.get("qc") or {}).get("score")} for a in info.get("attempts", [])]
+    return {"X-Tryon-Info": quote(_j.dumps(brief, ensure_ascii=False))}
+
+
+@r.post("/tryon/trial")
+async def tryon_trial(mode: str = Form(...), final_id: str = Form(...), scene: str = Form(""), photo: UploadFile = File(...),
+                      u=Depends(require("ops", "tech"))):
+    """运营试跑真换装 / 本人穿礼服：返回带水印的结果，响应头 X-Tryon-Info 给出模型、质检分、耗时与各次尝试。"""
+    if mode not in ("tryon", "portrait"):
+        raise HTTPException(400, "试跑模板合影请在模板卡片上操作")
+    f = next((x for x in shareable_finals() if x["id"] == final_id), None)
+    if not f:
+        raise HTTPException(400, "只能选择授权等级为“可对外展示”及以上的有效定稿")
+    selfie = await photo.read()
+    try:
+        garment, fields = worker.final_context(f)
+        img, info = worker.tryon_generate(mode, selfie, garment, None, fields, scene)
+    except ai.ModelError as e:
+        raise HTTPException(503, str(e))
+    finally:
+        selfie = None
+    audit(u, "试跑观众换装", f"{f['asset_no']} · {tryon_mod.MODES[mode]}", after={k: info.get(k) for k in ("model", "qc_score", "seconds")})
+    out = ai.watermark(img, "AI 生成 · 试跑", {"label": "AI 生成", "trial": True, "mode": mode})
+    return Response(out, media_type="image/png", headers=_info_headers(info))
 
 
 # ================================================================ 活动
@@ -124,8 +156,10 @@ class Activity(BaseModel):
     start: str
     end: str
     daily_limit: int = 3000
-    template_ids: list[str]
-    mode: str = "swap"
+    template_ids: list[str] = []
+    mode: str = "swap"          # tryon 真换装 / swap 模板合影 / portrait 本人穿礼服
+    final_id: str = ""          # tryon、portrait 使用的定稿服饰
+    scene: str = ""             # portrait 的场景描述
 
 
 @r.get("/activities")
@@ -136,17 +170,33 @@ def activities(u=Depends(current_user)):
         jobs = store.list("photo_jobs", activity_id=a["id"])
         tj = [j for j in jobs if j["day"] == today]
         done = [j for j in jobs if j["status"] == "done"]
+        qcs = [j["qc_score"] for j in done if j.get("qc_score") is not None]
+        models = {}
+        for j in done:
+            models[j.get("model_name") or j.get("model") or "—"] = models.get(j.get("model_name") or j.get("model") or "—", 0) + 1
         out.append(dict(a, today=len(tj), total=len(jobs), success=round(len(done) / len(jobs) * 100, 1) if jobs else None,
                         avg_seconds=round(sum(j.get("seconds", 0) for j in done) / len(done), 1) if done else None,
-                        saved=round(sum(1 for j in done if j.get("saved")) / len(done) * 100, 1) if done else None))
+                        saved=round(sum(1 for j in done if j.get("saved")) / len(done) * 100, 1) if done else None,
+                        avg_qc=round(sum(qcs) / len(qcs), 1) if qcs else None, degraded=sum(1 for j in done if j.get("degraded")),
+                        cost=round(sum(j.get("cost") or 0 for j in jobs), 2), models=models, mode_name=tryon_mod.MODES.get(a.get("mode", "swap"))))
     return out
 
 
 @r.post("/activities")
 def create_activity(body: Activity, u=Depends(require("ops"))):
+    if body.mode == "edit":
+        body.mode = "swap"
+    if body.mode not in tryon_mod.MODES:
+        raise HTTPException(400, "玩法无效")
     ts = [store.get("templates", t) for t in body.template_ids]
-    if not ts or any(t is None or t["status"] not in ("approved", "online") for t in ts):
-        raise HTTPException(400, "只能加入专家审核通过的模板")
+    if body.mode == "swap":
+        if not ts or any(t is None or t["status"] not in ("approved", "online") for t in ts):
+            raise HTTPException(400, "只能加入专家审核通过的模板")
+        body.final_id = ts[0]["final_id"]
+    else:
+        if not any(x["id"] == body.final_id for x in shareable_finals()):
+            raise HTTPException(400, "请选择授权等级为“可对外展示”及以上的有效定稿")
+        body.template_ids, ts = [], []
     a = store.insert("activities", dict(body.model_dump(), token=secrets.token_urlsafe(9), status="online", by=u["id"]))
     for t in ts:
         store.update("templates", t["id"], {"status": "online"})
@@ -181,7 +231,8 @@ def qr(aid: str, request: Request, u=Depends(current_user)):
 @r.get("/activities/{aid}/samples")
 def samples(aid: str, u=Depends(require("ops", "tech"))):
     """抽检：只返回合拍结果，不含自拍原图（服务端从不保存）。"""
-    return [{"id": j["id"], "result": j.get("result_file"), "at": j["_created"], "status": j["status"]}
+    return [{"id": j["id"], "result": j.get("result_file"), "at": j["_created"], "status": j["status"], "model": j.get("model_name"),
+             "qc": j.get("qc_score"), "qc_failed": j.get("qc_failed"), "degraded": j.get("degraded"), "seconds": j.get("seconds")}
             for j in store.list("photo_jobs", activity_id=aid)[-24:] if j.get("result_file")]
 
 
@@ -201,28 +252,37 @@ def live_activity(token: str) -> dict:
 def m_info(token: str):
     a = live_activity(token)
     ts = [t for t in (store.get("templates", i) for i in a["template_ids"]) if t and t["status"] == "online"]
-    f = store.get("finals", ts[0]["final_id"]) if ts else None
+    fid = a.get("final_id") or (ts[0]["final_id"] if ts else None)
+    f = store.get("finals", fid) if fid else None
     p = store.get("projects", f["project_id"]) if f else None
     run = store.get("runs", f["run_ids"][0]) if f else None
     used = len([j for j in store.list("photo_jobs", activity_id=a["id"]) if j["day"] == time.strftime("%Y-%m-%d")])
     return {"name": a["name"], "hall": a["hall"], "full": used >= a["daily_limit"], "project": p["name"] if p else "",
+            "mode": a.get("mode", "swap"), "mode_name": tryon_mod.MODES.get(a.get("mode", "swap")),
+            "available": bool(ts) if a.get("mode", "swap") == "swap" else bool(f),
             "artifact": p.get("artifact") if p else "", "final_file": run["file_id"] if run else None,
             "templates": [{"id": t["id"], "file_id": t["file_id"], "pose": t["pose"], "bg": t["bg"]} for t in ts]}
 
 
 @r.post("/m/{token}/photo")
-async def m_photo(token: str, request: Request, template_id: str = Form(...), consent: bool = Form(False),
+async def m_photo(token: str, request: Request, template_id: str = Form(""), consent: bool = Form(False),
                   guardian: bool = Form(False), minor: bool = Form(False), photo: UploadFile = File(...)):
     a = live_activity(token)
     if not consent:
         raise HTTPException(400, "需要先同意人脸信息处理")
     if minor and not guardian:
         raise HTTPException(400, "未满 14 周岁需监护人同意")
-    if template_id not in a["template_ids"]:
-        raise HTTPException(400, "模板无效")
-    t = store.get("templates", template_id)
-    if not t or t["status"] != "online":
-        raise HTTPException(400, "模板已下线")
+    mode = a.get("mode", "swap")
+    t = None
+    if mode == "swap":
+        if template_id not in a["template_ids"]:
+            raise HTTPException(400, "模板无效")
+        t = store.get("templates", template_id)
+        if not t or t["status"] != "online":
+            raise HTTPException(400, "模板已下线")
+    final = store.get("finals", a.get("final_id") or (t or {}).get("final_id") or "")
+    if not final or final.get("status") != "active":
+        raise HTTPException(400, "活动服饰已下线")
     today = time.strftime("%Y-%m-%d")
     if len([j for j in store.list("photo_jobs", activity_id=a["id"]) if j["day"] == today]) >= a["daily_limit"]:
         raise HTTPException(429, "今日合拍次数已满，欢迎明天再来")
@@ -239,24 +299,24 @@ async def m_photo(token: str, request: Request, template_id: str = Form(...), co
     if n is not None and n != 1:
         del selfie
         raise HTTPException(422, "没有检测到人脸，请正对镜头重拍" if n == 0 else "照片中有多张人脸，请只拍一个人")
-    job = store.insert("photo_jobs", {"activity_id": a["id"], "template_id": template_id, "status": "running", "day": today})
+    job = store.insert("photo_jobs", {"activity_id": a["id"], "template_id": template_id or None, "mode": mode, "status": "running", "day": today})
     t0 = time.time()
     try:
-        img = None
-        for attempt in range(2):            # 失败自动重试 1 次
-            try:
-                img = worker.fusion_generate(selfie, file_bytes(t["file_id"]), a.get("mode", "swap"))
-                break
-            except ai.ModelError:
-                if attempt == 1:
-                    raise
-        meta = {"label": "AI 生成", "platform": "衣冠·AI复原工作台", "activity": a["name"], "content_id": job["id"], "time": time.strftime("%Y-%m-%dT%H:%M:%S")}
+        garment, fields = worker.final_context(final)
+        # 主备模型切换、质检不合格重试都在 tryon.run 中完成
+        img, info = worker.tryon_generate(mode, selfie, garment, file_bytes(t["file_id"]) if t else None, fields, a.get("scene", ""))
+        meta = {"label": "AI 生成", "platform": "衣冠·AI复原工作台", "activity": a["name"], "content_id": job["id"],
+                "model": info["model_name"], "prompt_version": info["prompt_version"], "time": time.strftime("%Y-%m-%dT%H:%M:%S")}
         out = ai.watermark(img, f"AI 生成 · {a['name']}", meta)
         rf = save_file(out, "image/png", None, "photo.png")
         store.update("photo_jobs", job["id"], {"status": "done", "result_file": rf["id"], "seconds": round(time.time() - t0, 1),
-                                               "expires": time.time() + RESULT_HOURS * 3600, "key": secrets.token_urlsafe(16)})
+                                               "expires": time.time() + RESULT_HOURS * 3600, "key": secrets.token_urlsafe(16),
+                                               "model": info["model"], "model_name": info["model_name"], "qc_score": info["qc_score"],
+                                               "qc_failed": info["qc_failed"], "degraded": info["degraded"], "cost": info.get("cost"),
+                                               "prompt_version": info["prompt_version"], "seed": info["seed"],
+                                               "attempts": [{k: x.get(k) for k in ("model", "try", "seconds", "error")} | {"qc": (x.get("qc") or {}).get("score")} for x in info["attempts"]]})
     except ai.ModelError as e:
-        store.update("photo_jobs", job["id"], {"status": "failed", "error": str(e)[:200]})
+        store.update("photo_jobs", job["id"], {"status": "failed", "error": str(e)[:300], "seconds": round(time.time() - t0, 1)})
         raise HTTPException(503, "生成失败，请稍后再试")
     finally:
         selfie = None                     # 无论成功失败，自拍随请求结束释放，不写入任何存储与日志
@@ -316,6 +376,7 @@ class ModelPatch(BaseModel):
     timeout: int | None = None
     cross_border: bool | None = None
     demo_mock: bool | None = None
+    price: float | None = None
 
 
 @r.patch("/settings/models/{mid}")
@@ -340,6 +401,44 @@ def test_model(mid: str, u=Depends(require("tech"))):
         return {"ok": True, "message": adapter.test() + ("（演示模式模拟）" if mocked else "")}
     except Exception as e:
         return {"ok": False, "message": str(e)[:300]}
+
+
+class Policy(BaseModel):
+    tryon_chain: list[str] | None = None
+    swap_chain: list[str] | None = None
+    portrait_chain: list[str] | None = None
+    template_model: str | None = None
+    qc: bool | None = None
+    qc_model: str | None = None
+    qc_pass: int | None = None
+    qc_floor: int | None = None
+    tries_per_model: int | None = None
+    deadline: int | None = None
+
+
+@r.get("/settings/tryon-policy")
+def get_policy(u=Depends(require("tech", "ops"))):
+    return {"policy": worker.tryon_policy(), "modes": tryon_mod.MODES, "prompt_version": tryon_mod.PROMPT_VERSION,
+            "models": [{"code": m["code"], "name": m["name"], "enabled": m.get("enabled", True), "has_key": bool(m.get("key")), "price": m.get("price")}
+                       for m in store.list("models") if m["purpose"] in ("tryon", "generate") and m["kind"] != "comfyui"]}
+
+
+@r.put("/settings/tryon-policy")
+def put_policy(body: Policy, u=Depends(require("tech"))):
+    ch = {k: v for k, v in body.model_dump().items() if v is not None}
+    codes = {m["code"] for m in store.list("models")}
+    for k in ("tryon_chain", "swap_chain", "portrait_chain"):
+        if k in ch:
+            ch[k] = [c for c in ch[k] if c]
+            if not ch[k] or any(c not in codes for c in ch[k]):
+                raise HTTPException(400, f"{k} 中有不存在的模型")
+    if "qc_pass" in ch and not 0 <= ch["qc_pass"] <= 100 or "qc_floor" in ch and not 0 <= ch["qc_floor"] <= 100:
+        raise HTTPException(400, "质检分数应在 0–100 之间")
+    f = model_cfg("fusion")
+    pol = dict(f.get("policy") or {}, **ch)
+    store.update("models", f["id"], {"policy": pol})
+    audit(u, "修改换装策略", "", after=ch)
+    return get_policy(u)
 
 
 class WL(BaseModel):

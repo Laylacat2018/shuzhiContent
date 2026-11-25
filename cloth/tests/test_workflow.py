@@ -257,6 +257,28 @@ def test_full_workflow(env):
                     files={"photo": ("me.jpg", png(), "image/jpeg")}).status_code == 429   # 每日上限 3
     store.update("photo_jobs", res["id"], {"expires": time.time() - 1})
     assert vis.get(f"/api/m/result/{res['id']}", params={"key": res["key"]}).status_code == 410
+    # ---------------- 真换装活动（定稿服饰 + 观众照片，主备模型 + 质检；演示模式为模拟输出）
+    assert ops.post("/api/activities", json={"name": "线上试穿", "start": "2020-01-01", "end": "2099-01-01", "mode": "tryon"}).status_code == 400
+    act2 = ops.post("/api/activities", json={"name": "线上试穿", "start": "2020-01-01", "end": "2099-01-01", "mode": "tryon",
+                                             "final_id": fin["id"], "daily_limit": 5}).json()
+    info2 = vis.get(f"/api/m/{act2['token']}").json()
+    assert info2["mode"] == "tryon" and info2["available"] and info2["templates"] == []
+    res2 = vis.post(f"/api/m/{act2['token']}/photo", data={"consent": "true"}, files={"photo": ("me.jpg", png(size=(400, 700)), "image/jpeg")})
+    assert res2.status_code == 200, res2.text
+    job = store.get("photo_jobs", res2.json()["id"])
+    assert job["mode"] == "tryon" and job["model"] == "sdpro" and job["prompt_version"] == "tryon-v1" and job["attempts"]
+    got = vis.get(f"/api/m/result/{job['id']}", params={"key": res2.json()["key"]})
+    assert json.loads(Image.open(io.BytesIO(got.content)).info["AIGC"])["prompt_version"] == "tryon-v1"
+    a2 = next(a for a in ops.get("/api/activities").json() if a["id"] == act2["id"])
+    assert a2["mode_name"] == "真换装" and a2["total"] == 1
+    tr = ops.post("/api/tryon/trial", data={"mode": "portrait", "final_id": fin["id"], "scene": "书房"}, files={"photo": ("me.jpg", png(), "image/jpeg")})
+    assert tr.status_code == 200 and "X-Tryon-Info" in tr.headers
+    assert li.post("/api/tryon/trial", data={"mode": "tryon", "final_id": fin["id"]}, files={"photo": ("me.jpg", png(), "image/jpeg")}).status_code == 403
+    pol = admin.get("/api/settings/tryon-policy").json()
+    assert pol["policy"]["tryon_chain"][0] == "sdpro" and any(m["code"] == "qimg3" for m in pol["models"])
+    assert admin.put("/api/settings/tryon-policy", json={"tryon_chain": ["nope"]}).status_code == 400
+    assert admin.put("/api/settings/tryon-policy", json={"tryon_chain": ["sd55", "sdpro"], "qc_pass": 75}).json()["policy"]["qc_pass"] == 75
+    assert ops.put("/api/settings/tryon-policy", json={"qc": False}).status_code == 403
     # 撤销定稿 → 模板下线 → 手机端不可见
     wang.post(f"/api/finals/{fin['id']}/revoke", json={"reason": "复核发现问题"})
     assert vis.get(f"/api/m/{tok}").json()["templates"] == []

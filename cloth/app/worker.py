@@ -90,24 +90,60 @@ def submit(task_id: str):
     return POOL.submit(run_task, task_id)
 
 
-def fusion_generate(selfie: bytes, template_png: bytes, mode: str) -> bytes:
-    """合拍：多图编辑方式，把观众面部融合到模板中，服装不变。"""
-    cfg = model_cfg("fusion")
-    code = cfg.get("model") or "sd"
-    adapter, gcfg, _ = adapter_for(code)
-    prompt = ("第一张图是合拍模板：一位虚拟模特穿着复原的明代服饰。第二张图是观众本人照片。"
-              "请把模板中模特的脸部替换为观众的脸，保持观众的五官、肤色与神态；服装、姿势、背景、光线完全保持模板不变；不要添加文字。")
-    if gcfg["kind"] == "comfyui":
-        raise ai.ModelError("合拍需使用支持多图输入的云端模型")
-    return adapter.generate(prompt, "文字, 水印, 变形", [template_png, selfie], random.randint(1, 2**31 - 1))
+def tryon_policy() -> dict:
+    from .tryon import DEFAULT_POLICY
+    cfg = model_cfg("fusion") or {}
+    return dict(DEFAULT_POLICY, **(cfg.get("policy") or {}))
+
+
+def qc_adapter(policy: dict):
+    """质检视觉模型；未配置密钥或已停用时返回 None（跳过质检，不阻塞出图）。"""
+    if not policy.get("qc"):
+        return None
+    try:
+        a, cfg, mocked = adapter_for(policy.get("qc_model") or "qc")
+    except ai.ModelError:
+        return None
+    return None if mocked else a
+
+
+def tryon_generate(mode: str, selfie: bytes, garment: bytes | None, template: bytes | None, fields: list, scene: str = "") -> tuple[bytes, dict]:
+    """观众换装：规格书提示词 + 主备模型 + 自动质检，见 tryon.run。"""
+    from . import tryon
+    pol = tryon_policy()
+    img, info = tryon.run(mode, selfie, garment, template, fields, pol, adapter_for, qc_adapter(pol), scene)
+    for a in info["attempts"]:                     # 用量与成本统计
+        if a.get("error") and "seconds" not in a:
+            continue
+        m = model_cfg(a["model"])
+        if m:
+            store.update("models", m["id"], {"used": int(m.get("used", 0)) + 1})
+    info["cost"] = round(sum(float((model_cfg(a["model"]) or {}).get("price") or 0) for a in info["attempts"] if "seconds" in a and not a.get("error")), 3)
+    return img, info
+
+
+def final_context(final: dict) -> tuple[bytes, list]:
+    """定稿 → (服饰图, 所依据规格书版本的字段)。"""
+    run = store.get("runs", final["run_ids"][0])
+    return file_bytes(run["file_id"]), spec_fields(run["spec_version_id"]) if run.get("spec_version_id") else []
+
+
+def fusion_generate(selfie: bytes, template_png: bytes, mode: str, fields: list | None = None) -> bytes:
+    """模板合影（兼容旧调用）：等同 tryon_generate("swap")。"""
+    return tryon_generate("swap", selfie, None, template_png, fields or [])[0]
 
 
 def template_generate(final_png: bytes, gender: str, pose: str, bg: str) -> tuple[bytes, dict, bool]:
     cfg = model_cfg("fusion")
-    adapter, gcfg, mocked = adapter_for(cfg.get("model") or "sd")
+    code = tryon_policy().get("template_model") or cfg.get("model") or "sd"
+    try:
+        adapter, gcfg, mocked = adapter_for(code)
+    except ai.ModelError:
+        adapter, gcfg, mocked = adapter_for(cfg.get("model") or "sd")
     who = {"女": "一位虚构的年轻中国女性", "男": "一位虚构的年轻中国男性", "儿童": "一位虚构的中国儿童"}.get(gender, "一位虚构人物")
     prompt = (f"参考图是专家定稿的明代服饰复原件。请生成{who}（不是任何真实人物）穿着这件服装的写实全身照片，"
-              f"姿势：{pose}；背景：{bg}。脸部正对或微侧、无遮挡；服装的颜色、纹样、结构必须与参考图完全一致，霞帔与坠子完整可见；"
+              f"姿势：{pose}；背景：{bg}（不要宫殿、城楼、宫门等建筑）。膝盖以上七分身构图，人物充满画面，脸部正对镜头、清晰无遮挡、面部宽度不小于画面宽度的五分之一；"
+              "服装的颜色、纹样、结构必须与参考图完全一致，霞帔与坠子完整可见；"
               "不要冠饰，发型为简单的明式发髻；不要文字。")
     img = adapter.generate(prompt, "文字, 水印, 真实名人", [final_png], random.randint(1, 2**31 - 1))
     return img, {"model": gcfg["name"], "prompt": prompt}, mocked

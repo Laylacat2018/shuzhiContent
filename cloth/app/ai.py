@@ -40,6 +40,41 @@ def data_uri(data: bytes, mime="image/png") -> str:
     return f"data:{mime};base64," + base64.b64encode(data).decode()
 
 
+def for_upload(data: bytes, max_side: int = 2048) -> bytes:
+    """发给云端模型前统一转 JPEG、长边不超过 2048，减小请求体并去掉原图 EXIF（含定位等信息）。"""
+    im = Image.open(io.BytesIO(data))
+    im = im.convert("RGB")
+    im.thumbnail((max_side, max_side))
+    out = io.BytesIO()
+    im.save(out, "JPEG", quality=90)
+    return out.getvalue()
+
+
+def size_for(data: bytes, pixels: int = 1536 * 2048) -> str:
+    """按输入图片的宽高比给出约 300 万像素、边长为 64 倍数的输出尺寸，如 "1536x2048"。"""
+    w, h = Image.open(io.BytesIO(data)).size
+    ratio = max(0.5, min(2.0, w / h))
+    ow = int((pixels * ratio) ** 0.5) // 64 * 64
+    oh = int(ow / ratio) // 64 * 64
+    return f"{ow}x{oh}"
+
+
+def _download(url: str) -> bytes:
+    r = httpx.get(url, timeout=90)
+    if r.status_code >= 400:
+        raise ModelError(f"下载结果图失败 {r.status_code}")
+    return r.content
+
+
+def _err(r) -> str:
+    try:
+        d = r.json()
+        e = d.get("error") if isinstance(d.get("error"), dict) else d
+        return str(e.get("message") or e.get("code") or d)[:300]
+    except Exception:
+        return r.text[:300]
+
+
 # ---------------------------------------------------------------- 提示词
 
 def build_prompt(fields: list, stage: str, view: str, has_ref: bool, revisions: list | None = None, group: str | None = None) -> tuple[str, str]:
@@ -85,7 +120,7 @@ class Adapter:
         if not self.key:
             raise ModelError(f"{self.cfg['name']} 未配置密钥（系统设置 → 模型接入）")
 
-    def generate(self, prompt: str, negative: str, refs: list[bytes], seed: int) -> bytes:
+    def generate(self, prompt: str, negative: str, refs: list[bytes], seed: int, size: str | None = None) -> bytes:
         raise NotImplementedError
 
     def test(self) -> str:
@@ -94,7 +129,7 @@ class Adapter:
 
 
 class GeminiAdapter(Adapter):
-    def generate(self, prompt, negative, refs, seed):
+    def generate(self, prompt, negative, refs, seed, size=None):
         self.need_key()
         parts = [{"text": prompt + (f"\n避免：{negative}" if negative else "")}]
         parts += [{"inline_data": {"mime_type": "image/png", "data": base64.b64encode(to_png(r)).decode()}} for r in refs]
@@ -119,27 +154,135 @@ class GeminiAdapter(Adapter):
 
 
 class ArkAdapter(Adapter):
-    """火山方舟 Seedream 图像生成接口。"""
+    """火山方舟 Seedream 图像生成 / 多图编辑接口（images/generations）。size 为 "宽x高"。"""
 
-    def generate(self, prompt, negative, refs, seed):
+    def generate(self, prompt, negative, refs, seed, size=None):
         self.need_key()
-        body = {"model": self.cfg["model"], "prompt": prompt, "size": "1728x2304", "response_format": "b64_json", "watermark": False}
+        body = {"model": self.cfg["model"], "prompt": prompt, "size": size or self.cfg.get("size") or "1728x2304",
+                "response_format": "b64_json", "watermark": False}
         if refs:
-            body["image"] = [data_uri(to_png(r)) for r in refs]
+            body["image"] = [data_uri(for_upload(r), "image/jpeg") for r in refs]
         r = httpx.post(self.cfg["endpoint"].rstrip("/") + "/images/generations", json=body,
                        headers={"Authorization": f"Bearer {self.key}"}, timeout=self.timeout)
         if r.status_code >= 400:
-            raise ModelError(f"Seedream 返回 {r.status_code}：{r.text[:300]}")
+            raise ModelError(f"{self.cfg['name']} 返回 {r.status_code}：{_err(r)}")
         data = r.json().get("data") or []
         if not data:
-            raise ModelError("Seedream 没有返回图片")
+            raise ModelError(f"{self.cfg['name']} 没有返回图片")
         if data[0].get("b64_json"):
             return base64.b64decode(data[0]["b64_json"])
-        return httpx.get(data[0]["url"], timeout=60).content
+        return _download(data[0]["url"])
+
+    def test(self):
+        self.need_key()
+        r = httpx.get(self.cfg["endpoint"].rstrip("/") + "/models", headers={"Authorization": f"Bearer {self.key}"}, timeout=20)
+        if r.status_code >= 400:
+            raise ModelError(f"连通失败 {r.status_code}：{_err(r)}")
+        ids = {m.get("id") for m in r.json().get("data", [])}
+        return "连通正常" + ("" if self.cfg["model"] in ids else f"（未找到 {self.cfg['model']}，请在方舟“开通管理”开通或改模型名）")
+
+
+class DashScopeImageAdapter(Adapter):
+    """阿里云百炼 Qwen-Image 多图编辑（multimodal-generation，同步返回图片链接）。size 为 "宽*高"。"""
+
+    def generate(self, prompt, negative, refs, seed, size=None):
+        self.need_key()
+        content = [{"image": data_uri(for_upload(b), "image/jpeg")} for b in refs] + [{"text": prompt}]
+        params = {"n": 1, "watermark": False, "prompt_extend": False, "seed": seed % 2147483647}
+        if negative:
+            params["negative_prompt"] = negative[:500]
+        if size:
+            params["size"] = size.replace("x", "*")
+        r = httpx.post(self.cfg["endpoint"].rstrip("/") + "/services/aigc/multimodal-generation/generation",
+                       headers={"Authorization": f"Bearer {self.key}"}, timeout=self.timeout,
+                       json={"model": self.cfg["model"], "input": {"messages": [{"role": "user", "content": content}]}, "parameters": params})
+        if r.status_code >= 400:
+            raise ModelError(f"{self.cfg['name']} 返回 {r.status_code}：{_err(r)}")
+        for ch in (r.json().get("output") or {}).get("choices", []):
+            for c in ch.get("message", {}).get("content", []):
+                if c.get("image"):
+                    return _download(c["image"])
+        raise ModelError(f"{self.cfg['name']} 没有返回图片")
+
+    def test(self):
+        self.need_key()
+        r = httpx.get(self.cfg["endpoint"].replace("/api/v1", "/compatible-mode/v1").rstrip("/") + "/models",
+                      headers={"Authorization": f"Bearer {self.key}"}, timeout=20)
+        if r.status_code >= 400:
+            raise ModelError(f"连通失败 {r.status_code}：{_err(r)}")
+        ids = {m.get("id") for m in r.json().get("data", [])}
+        return "连通正常" + ("" if self.cfg["model"] in ids else f"（账号模型列表中未找到 {self.cfg['model']}，请在百炼开通）")
+
+
+def volc_sign(ak: str, sk: str, method: str, host: str, path: str, query: dict, body: bytes,
+              region: str = "cn-north-1", service: str = "cv", now: float | None = None) -> dict:
+    """火山引擎 OpenAPI 签名（HMAC-SHA256，与官方 SDK 的 Sign V4 一致），返回需要附加的请求头。"""
+    import hashlib
+    import hmac
+    from urllib.parse import quote
+    t = time.gmtime(now if now is not None else time.time())
+    xdate, short = time.strftime("%Y%m%dT%H%M%SZ", t), time.strftime("%Y%m%d", t)
+    payload = hashlib.sha256(body).hexdigest()
+    headers = {"content-type": "application/json", "host": host, "x-content-sha256": payload, "x-date": xdate}
+    signed = ";".join(sorted(headers))
+    canon_q = "&".join(f"{quote(k, safe='-_.~')}={quote(str(v), safe='-_.~')}" for k, v in sorted(query.items()))
+    canon = "\n".join([method, path, canon_q, "".join(f"{k}:{headers[k]}\n" for k in sorted(headers)), signed, payload])
+    scope = f"{short}/{region}/{service}/request"
+    to_sign = "\n".join(["HMAC-SHA256", xdate, scope, hashlib.sha256(canon.encode()).hexdigest()])
+    k = sk.encode()
+    for part in (short, region, service, "request"):
+        k = hmac.new(k, part.encode(), hashlib.sha256).digest()
+    sig = hmac.new(k, to_sign.encode(), hashlib.sha256).hexdigest()
+    return {"Content-Type": "application/json", "Host": host, "X-Date": xdate, "X-Content-Sha256": payload,
+            "Authorization": f"HMAC-SHA256 Credential={ak}/{scope}, SignedHeaders={signed}, Signature={sig}"}
+
+
+class VolcVisualAdapter(Adapter):
+    """火山引擎视觉智能（即梦图片生成，异步提交 + 查询）。密钥填写为 “AccessKeyID:SecretAccessKey”；
+    模型名填写 req_key（如 jimeng_t2i_v40，以控制台文档为准）。该适配器尚未在真实账号上联调，上线前须先“连通测试”并试跑。"""
+
+    HOST, VERSION = "visual.volcengineapi.com", "2022-08-31"
+
+    def _call(self, action: str, payload: dict) -> dict:
+        self.need_key()
+        if ":" not in self.key:
+            raise ModelError("即梦密钥格式应为 AccessKeyID:SecretAccessKey")
+        ak, sk = self.key.split(":", 1)
+        body = json.dumps(payload).encode()
+        q = {"Action": action, "Version": self.VERSION}
+        h = volc_sign(ak.strip(), sk.strip(), "POST", self.HOST, "/", q, body)
+        r = httpx.post(f"https://{self.HOST}/", params=q, content=body, headers=h, timeout=60)
+        d = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}
+        if r.status_code >= 400 or d.get("code") not in (10000, None):
+            raise ModelError(f"即梦返回 {r.status_code}：{(d.get('message') or r.text)[:300]}")
+        return d.get("data") or {}
+
+    def generate(self, prompt, negative, refs, seed, size=None):
+        payload = {"req_key": self.cfg["model"], "prompt": prompt, "seed": seed % 2147483647, "force_single": True}
+        if refs:
+            payload["binary_data_base64"] = [base64.b64encode(for_upload(b)).decode() for b in refs]
+        if size and "x" in size:
+            w, h = size.split("x")
+            payload.update(width=int(w), height=int(h))
+        task = self._call("CVSync2AsyncSubmitTask", payload).get("task_id")
+        if not task:
+            raise ModelError("即梦未返回任务编号")
+        t0 = time.time()
+        while time.time() - t0 < self.timeout:
+            time.sleep(2)
+            d = self._call("CVSync2AsyncGetResult", {"req_key": self.cfg["model"], "task_id": task, "req_json": json.dumps({"return_url": False})})
+            if d.get("status") == "done":
+                imgs = d.get("binary_data_base64") or []
+                if imgs:
+                    return base64.b64decode(imgs[0])
+                raise ModelError("即梦没有返回图片")
+            if d.get("status") in ("not_found", "expired"):
+                raise ModelError(f"即梦任务{d.get('status')}")
+        raise ModelError("即梦超时")
 
 
 class OpenAIAdapter(Adapter):
-    def generate(self, prompt, negative, refs, seed):
+    def generate(self, prompt, negative, refs, seed, size=None):
         self.need_key()
         base = self.cfg["endpoint"].rstrip("/")
         h = {"Authorization": f"Bearer {self.key}"}
@@ -173,7 +316,7 @@ class ComfyAdapter(Adapter):
         dev = (info.get("devices") or [{}])[0]
         return f"连通正常 · {dev.get('name', 'GPU')}"
 
-    def generate(self, prompt, negative, refs, seed):
+    def generate(self, prompt, negative, refs, seed, size=None):
         if not refs:
             raise ModelError("Qwen-Image-Edit 需要参考图（请先设置主史料）")
         boundary = uuid.uuid4().hex
@@ -226,7 +369,7 @@ class MockAdapter(Adapter):
     def test(self):
         return "演示模式 · 模拟输出"
 
-    def generate(self, prompt, negative, refs, seed):
+    def generate(self, prompt, negative, refs, seed, size=None):
         rnd = random.Random(seed)
         if refs:
             im = Image.open(io.BytesIO(refs[0])).convert("RGB")
@@ -248,17 +391,27 @@ class MockAdapter(Adapter):
 class VisionAdapter(Adapter):
     """OpenAI 兼容的多模态对话接口（如通义千问 VL 兼容模式）。"""
 
-    def ask(self, prompt: str, images: list[bytes]) -> str:
+    def test(self):
         self.need_key()
-        content = [{"type": "text", "text": prompt}] + [{"type": "image_url", "image_url": {"url": data_uri(to_png(b))}} for b in images]
+        r = httpx.get(self.cfg["endpoint"].rstrip("/") + "/models", headers={"Authorization": f"Bearer {self.key}"}, timeout=20)
+        if r.status_code >= 400:
+            raise ModelError(f"连通失败 {r.status_code}：{_err(r)}")
+        return "连通正常"
+
+    def ask(self, prompt: str, images: list[bytes], json_mode: bool = False) -> str:
+        self.need_key()
+        content = [{"type": "text", "text": prompt}] + [{"type": "image_url", "image_url": {"url": data_uri(for_upload(b, 1280), "image/jpeg")}} for b in images]
+        body = {"model": self.cfg["model"], "messages": [{"role": "user", "content": content}]}
+        if json_mode:
+            body["response_format"] = {"type": "json_object"}
         r = httpx.post(self.cfg["endpoint"].rstrip("/") + "/chat/completions", headers={"Authorization": f"Bearer {self.key}"},
-                       json={"model": self.cfg["model"], "messages": [{"role": "user", "content": content}]}, timeout=self.timeout)
+                       json=body, timeout=self.timeout)
         if r.status_code >= 400:
             raise ModelError(f"视觉模型返回 {r.status_code}：{r.text[:300]}")
         return r.json()["choices"][0]["message"]["content"]
 
 
-ADAPTERS = {"gemini": GeminiAdapter, "ark": ArkAdapter, "openai": OpenAIAdapter, "comfyui": ComfyAdapter, "mock": MockAdapter, "openai_chat": VisionAdapter}
+ADAPTERS = {"gemini": GeminiAdapter, "ark": ArkAdapter, "dashscope_image": DashScopeImageAdapter, "volc_visual": VolcVisualAdapter, "openai": OpenAIAdapter, "comfyui": ComfyAdapter, "mock": MockAdapter, "openai_chat": VisionAdapter}
 
 
 def parse_json_block(text: str):

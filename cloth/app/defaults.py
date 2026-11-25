@@ -79,6 +79,13 @@ MODELS = [
     {"code": "qwen", "name": "Qwen-Image-Edit（本地）", "purpose": "generate", "kind": "comfyui", "endpoint": "http://127.0.0.1:8188", "model": "qwen_image_edit_2509_fp8_e4m3fn.safetensors", "cross_border": False, "concurrency": 1, "timeout": 900},
     {"code": "vision", "name": "视觉读图 / AI 预评", "purpose": "vision", "kind": "openai_chat", "endpoint": "https://dashscope.aliyuncs.com/compatible-mode/v1", "model": "qwen-vl-max", "cross_border": False, "concurrency": 4, "timeout": 90},
     {"code": "fusion", "name": "合拍生成", "purpose": "fusion", "kind": "edit_model", "endpoint": "", "model": "sd", "cross_border": False, "concurrency": 20, "timeout": 30},
+    # 观众换装（2026-11 选型测试结论；均为国内已备案模型，数据不出境）。price 为单张价格（元），由运营按账单填写，用于成本统计
+    {"code": "sdpro", "name": "Seedream 5.0 Pro（换装）", "purpose": "tryon", "kind": "ark", "endpoint": "https://ark.cn-beijing.volces.com/api/v3", "model": "doubao-seedream-5-0-pro-260628", "cross_border": False, "concurrency": 10, "timeout": 90, "price": None},
+    {"code": "sd55", "name": "Seedream 5.5（换装）", "purpose": "tryon", "kind": "ark", "endpoint": "https://ark.cn-beijing.volces.com/api/v3", "model": "doubao-seedream-5-5-261028", "cross_border": False, "concurrency": 10, "timeout": 90, "price": None},
+    {"code": "sdflash", "name": "Seedream 5.0 Flash（换装）", "purpose": "tryon", "kind": "ark", "endpoint": "https://ark.cn-beijing.volces.com/api/v3", "model": "doubao-seedream-5-0-flash-260915", "cross_border": False, "concurrency": 10, "timeout": 60, "price": None},
+    {"code": "qimg3", "name": "Qwen-Image 3.0 Pro（换装）", "purpose": "tryon", "kind": "dashscope_image", "endpoint": "https://dashscope.aliyuncs.com/api/v1", "model": "qwen-image-3.0-pro", "cross_border": False, "concurrency": 5, "timeout": 200, "price": None},
+    {"code": "jimeng", "name": "即梦（火山视觉智能，换装）", "purpose": "tryon", "kind": "volc_visual", "endpoint": "https://visual.volcengineapi.com", "model": "jimeng_t2i_v40", "cross_border": False, "concurrency": 5, "timeout": 120, "price": None, "enabled_default": False},
+    {"code": "qc", "name": "换装质检（视觉模型）", "purpose": "qc", "kind": "openai_chat", "endpoint": "https://dashscope.aliyuncs.com/compatible-mode/v1", "model": "qwen3-vl-plus", "cross_border": False, "concurrency": 10, "timeout": 60, "price": None},
 ]
 
 GROUP_OF_STAGE = {"draft": "E2", "revise": "E3", "apply": "E4", "experiment": "E0"}

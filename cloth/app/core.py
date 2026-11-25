@@ -159,9 +159,15 @@ def bootstrap():
     if not store.list("whitelist"):
         for name, level, domain, method, lic in defaults.WHITELIST:
             store.insert("whitelist", {"name": name, "level": level, "domain": domain, "method": method, "license": lic, "enabled": True})
-    if not store.list("models"):
-        for m in defaults.MODELS:
-            store.insert("models", dict(m, enabled=True, key=None, used=0))
+    have = {m["code"]: m for m in store.list("models")}
+    for m in defaults.MODELS:                      # 新版本增加的模型补进已有数据库；已有配置不覆盖
+        if m["code"] not in have:
+            d = {k: v for k, v in m.items() if k != "enabled_default"}
+            store.insert("models", dict(d, enabled=m.get("enabled_default", True), key=None, used=0))
+    fusion = next((m for m in store.list("models") if m["code"] == "fusion"), None)
+    if fusion and "policy" not in fusion:
+        from .tryon import DEFAULT_POLICY
+        store.update("models", fusion["id"], {"policy": dict(DEFAULT_POLICY)})
     if not store.list("review_templates"):
         store.insert("review_templates", {"name": "命妇礼服", "category": "女子服饰 · 命妇礼服", "version": 1, "locked": False,
                                           "dims": [{"code": c, "name": n, "fields": f, "weight": w, "scale": s, "required": True}

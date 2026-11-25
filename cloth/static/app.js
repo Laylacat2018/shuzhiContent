@@ -58,7 +58,7 @@ const App = {
       <span class="sub" v-if="G.project">{{G.project.name}} · {{G.project.museum}}</span><span class="sub" v-else>中国国家博物馆 × 咪咕</span>
       <span class="right"><span class="bell clickable" @click="go('#/projects')">待我处理<b>{{todoCount}}</b></span><span class="role">{{G.me.role_name}}</span><span class="avatar" :title="G.me.name">{{G.me.name.slice(0,1)}}</span><a style="color:#C9D6E3" @click="logout">退出</a></span></div>
      <nav class="steps" v-if="G.project"><a v-for="(s,i) in STEPS" :key="s[1]" :class="stepClass(i)" @click="go('#/p/'+G.project.id+'/'+s[1])"><span class="n">{{G.project.steps.done[i+1]&&STEPS[i][1]!==G.route.tab?'✓':i+1}}</span>{{s[0]}}<span class="ex" v-if="s[2]">专家</span></a></nav>
-     <nav class="tabs" v-else><a :class="{on:G.route.name==='projects'}" @click="go('#/projects')">复原项目</a><a :class="{on:G.route.name==='templates'}" @click="go('#/templates')">合拍模板</a><a :class="{on:G.route.name==='settings'}" @click="go('#/settings')">系统设置</a></nav>
+     <nav class="tabs" v-else><a :class="{on:G.route.name==='projects'}" @click="go('#/projects')">复原项目</a><a :class="{on:G.route.name==='templates'}" @click="go('#/templates')">观众换装</a><a :class="{on:G.route.name==='settings'}" @click="go('#/settings')">系统设置</a></nav>
     </div></header>
     <div class="wrap" v-if="G.project && G.route.name==='project'"><RefPanel :pid="G.project.id" :key="G.project.id"/><component :is="pageOf[G.route.tab]" :pid="G.project.id" :key="G.route.tab+G.project.id"/></div>
     <ProjectsPage v-else-if="G.route.name==='projects'"/><TemplatesPage v-else-if="G.route.name==='templates'"/><SettingsPage v-else-if="G.route.name==='settings'"/>
